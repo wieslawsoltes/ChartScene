@@ -1,0 +1,43 @@
+name: Offline numerical toolchain
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/offline-toolchain.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore tests/ChartScene.Tests/ChartScene.Tests.csproj
+      - name: Prepare isolated SDK and restored numerical dependencies
+        shell: python
+        run: |
+          from pathlib import Path
+          import shutil, subprocess
+          source = Path(shutil.which('dotnet')).resolve().parent
+          target = Path('artifacts/offline/dotnet')
+          target.mkdir(parents=True)
+          shutil.copy2(source / 'dotnet', target / 'dotnet')
+          sdk = subprocess.check_output(['dotnet', '--version'], text=True).strip()
+          shutil.copytree(source / 'sdk' / sdk, target / 'sdk' / sdk)
+          for family in ['host/fxr', 'shared/Microsoft.NETCore.App', 'shared/Microsoft.AspNetCore.App', 'packs/Microsoft.NETCore.App.Ref', 'packs/Microsoft.AspNetCore.App.Ref', 'packs/NETStandard.Library.Ref', 'packs/Microsoft.NETCore.App.Host.linux-x64']:
+              directory = source / family
+              if not directory.exists():
+                  continue
+              for version in directory.iterdir():
+                  if version.name.startswith('10.') or 'NETStandard' in family:
+                      shutil.copytree(version, target / family / version.name)
+          shutil.copytree(Path.home() / '.nuget/packages', Path('artifacts/offline/nuget'))
+      - run: tar -I 'gzip -1' -cf artifacts/offline-toolchain.tar.gz -C artifacts/offline .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-numerical-toolchain
+          path: artifacts/offline-toolchain.tar.gz
+          retention-days: 1
+          compression-level: 0
