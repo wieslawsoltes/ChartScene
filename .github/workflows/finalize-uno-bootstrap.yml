@@ -2,7 +2,7 @@ name: Finalize Uno bootstrap
 on:
   push:
     branches: [main]
-    paths: [.github/workflows/finalize-uno-bootstrap.yml]
+    paths: [.github/workflows/finalize-uno-bootstrap.yml, tools/bootstrap-fixes.py]
 permissions:
   contents: write
 jobs:
@@ -21,7 +21,7 @@ jobs:
           git config user.name 'Wiesław Šoltés'
           git config user.email 'wieslawsoltes@users.noreply.github.com'
           git add src tools .github/workflows/finalize-uno-bootstrap.yml
-          git commit -m 'fix(charting): correct horizontal ranges, preserve explicit viewports and initialize sample catalog lazily'
+          git commit -m 'fix(uno): validate sample ranges, date arithmetic, pointer mapping and resource disposal'
           git push origin HEAD:main
           git rev-parse HEAD > artifacts/validated-commit.txt
           git archive --format=zip --output=artifacts/source.zip HEAD
