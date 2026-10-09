@@ -18,6 +18,9 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - run: dotnet run --project tests/ChartScene.Tests -c Release
+      - name: Preserve exact source snapshot
+        if: always()
+        run: mkdir -p artifacts && git archive --format=zip --output=artifacts/source.zip HEAD
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><IsPackable>true</IsPackable><Description>Observable axes, chart series, annotations, palettes and viewport models.</Description></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../ChartScene.Numerics/ChartScene.Numerics.csproj" /></ItemGroup>
+</Project>
