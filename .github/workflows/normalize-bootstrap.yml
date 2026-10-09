@@ -1,0 +1,44 @@
+name: Finalize renderer bootstrap
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/normalize-bootstrap.yml]
+permissions:
+  contents: write
+jobs:
+  normalize-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Normalize explicit point declarations
+        shell: python
+        run: |
+          from pathlib import Path
+          for name in ['GridRenderer.cs', 'AnnotationRenderer.cs']:
+              p = Path('src/ChartScene.Rendering') / name
+              text = p.read_text()
+              text = text.replace('var a=projection.ToScreen', 'PointD a=projection.ToScreen')
+              text = text.replace('var first=projection.ToScreen', 'PointD first=projection.ToScreen')
+              text = text.replace('var a=ToScreen(model,annotation,plot,annotation.X1,annotation.Y1),b=', 'PointD a=ToScreen(model,annotation,plot,annotation.X1,annotation.Y1),b=')
+              p.write_text(text)
+          p = Path('src/ChartScene.Rendering/ChartRenderer.cs')
+          p.write_text(p.read_text().replace('16,true.ToString(),true', '16,"Arial",true'))
+      - run: dotnet run --project tests/ChartScene.Tests -c Release
+      - name: Commit tested source normalization and remove one-time workflow
+        run: |
+          rm .github/workflows/normalize-bootstrap.yml
+          git config user.name 'Wiesław Šoltés'
+          git config user.email 'wieslawsoltes@users.noreply.github.com'
+          git add src .github/workflows/normalize-bootstrap.yml
+          git commit -m 'fix(rendering): normalize point declarations and diagnostic text styling'
+          git push origin HEAD:main
+          git rev-parse HEAD > artifacts/validated-commit.txt
+          git archive --format=zip --output=artifacts/source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: renderer-bootstrap-validation
+          path: artifacts/

@@ -1,4 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><IsPackable>false</IsPackable></PropertyGroup>
-  <ItemGroup><ProjectReference Include="../../src/ChartScene.Charting/ChartScene.Charting.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../src/ChartScene.Rendering/ChartScene.Rendering.csproj" /></ItemGroup>
 </Project>
