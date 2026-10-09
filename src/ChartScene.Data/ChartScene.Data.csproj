@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><IsPackable>true</IsPackable><Description>Thread-safe columnar chart data, FIFO buffers, snapshots and heatmaps.</Description></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../ChartScene.Core/ChartScene.Core.csproj" /></ItemGroup>
+</Project>
