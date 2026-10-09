@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><IsPackable>true</IsPackable><Description>Reusable chart hit testing, pointer modifiers, navigation history and range synchronization.</Description></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../ChartScene.Rendering/ChartScene.Rendering.csproj" /></ItemGroup>
+</Project>
