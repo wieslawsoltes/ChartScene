@@ -1,0 +1,24 @@
+<Project Sdk="Uno.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0-browserwasm;net10.0-desktop</TargetFrameworks>
+    <UnoSingleProject>true</UnoSingleProject>
+    <OutputType>Exe</OutputType>
+    <UnoFeatures>SkiaRenderer;GLCanvas;</UnoFeatures>
+    <ApplicationTitle>ChartScene</ApplicationTitle>
+    <ApplicationId>org.chartscene.app</ApplicationId>
+    <ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+    <IsPackable>false</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <WasmShellWebAppBasePath>./</WasmShellWebAppBasePath>
+    <WasmShellEnableThreads>false</WasmShellEnableThreads>
+    <RunAOTCompilation>false</RunAOTCompilation>
+    <WasmShellAppTitle>ChartScene — scientific charting</WasmShellAppTitle>
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ChartScene.Controls/ChartScene.Controls.csproj" />
+    <ProjectReference Include="../ChartScene.Samples/ChartScene.Samples.csproj" />
+    <Content Include="chartscene.js" UnoDeploy="Root" />
+  </ItemGroup>
+</Project>
