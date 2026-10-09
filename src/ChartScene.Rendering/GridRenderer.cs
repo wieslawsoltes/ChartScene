@@ -17,7 +17,7 @@ public sealed partial class ChartRenderer
             double[] levels=series.ContourLevels.Count>0?series.ContourLevels.Where(double.IsFinite).ToArray():Enumerable.Range(1,10).Select(i=>range.At(i/11.0)).ToArray();
             foreach(var segment in Contours.MarchingSquares(grid,levels))
             {
-                var a=projection.ToScreen(segment.A.X,segment.A.Y),b=projection.ToScreen(segment.B.X,segment.B.Y);
+                PointD a=projection.ToScreen(segment.A.X,segment.A.Y),b=projection.ToScreen(segment.B.X,segment.B.Y);
                 if(Geometry.ClipLine(projection.Plot,ref a,ref b)) c.DrawLine(a,b,new(Alpha(series.ColorMap.Sample(range.Fraction(segment.Level)),series.Opacity),series.StrokeThickness));
                 _renderedPoints+=2;
             }
@@ -38,7 +38,7 @@ public sealed partial class ChartRenderer
                 }
                 image=new(grid.Width,grid.Height,pixels); _rasterCache[key]=image;
             }
-            var first=projection.ToScreen(grid.XEdges.Span[0],grid.YEdges.Span[0]),last=projection.ToScreen(grid.XEdges.Span[^1],grid.YEdges.Span[^1]);
+            PointD first=projection.ToScreen(grid.XEdges.Span[0],grid.YEdges.Span[0]),last=projection.ToScreen(grid.XEdges.Span[^1],grid.YEdges.Span[^1]);
             if(first.IsFinite&&last.IsFinite) c.DrawImage(image,RectD.FromPoints(first,last),first.X>last.X,first.Y>last.Y);
             _renderedPoints+=(long)grid.Width*grid.Height;
         }
@@ -47,7 +47,7 @@ public sealed partial class ChartRenderer
             for(int y=0;y<grid.Height;y++) for(int x=0;x<grid.Width;x++)
             {
                 double value=grid[x,y]; if(!double.IsFinite(value)) continue;
-                var a=projection.ToScreen(grid.XEdges.Span[x],grid.YEdges.Span[y]),b=projection.ToScreen(grid.XEdges.Span[x+1],grid.YEdges.Span[y+1]);
+                PointD a=projection.ToScreen(grid.XEdges.Span[x],grid.YEdges.Span[y]),b=projection.ToScreen(grid.XEdges.Span[x+1],grid.YEdges.Span[y+1]);
                 if(!a.IsFinite||!b.IsFinite) continue;
                 var rectangle=RectD.FromPoints(a,b); if(!rectangle.Intersects(projection.Plot)) continue;
                 DrawBoundedRect(c,rectangle,Alpha(series.ColorMap.Sample(range.Fraction(value)),series.Opacity),null,projection.Plot);

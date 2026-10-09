@@ -28,7 +28,7 @@ public static class AnnotationGeometry
     }
     public static (PointD A,PointD B) Endpoints(ChartModel model,ChartAnnotation annotation,RectD plot)
     {
-        var a=ToScreen(model,annotation,plot,annotation.X1,annotation.Y1),b=ToScreen(model,annotation,plot,annotation.X2,annotation.Y2);
+        PointD a=ToScreen(model,annotation,plot,annotation.X1,annotation.Y1),b=ToScreen(model,annotation,plot,annotation.X2,annotation.Y2);
         if(annotation.Kind==AnnotationKind.HorizontalLine) { a=new(plot.X,a.Y); b=new(plot.Right,a.Y); }
         if(annotation.Kind==AnnotationKind.VerticalLine) { a=new(a.X,plot.Y); b=new(a.X,plot.Bottom); }
         return(a,b);

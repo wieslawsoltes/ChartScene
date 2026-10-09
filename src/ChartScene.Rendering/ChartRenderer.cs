@@ -19,7 +19,7 @@ public sealed partial class ChartRenderer
         var errors=model.Validate();
         if(errors.Count>0)
         {
-            canvas.DrawText("Chart configuration error",new(16,28),new(model.Theme.Foreground,16,true.ToString(),true));
+            canvas.DrawText("Chart configuration error",new(16,28),new(model.Theme.Foreground,16,"Arial",true));
             for(int i=0;i<errors.Count;i++) canvas.DrawText(errors[i],new(16,52+i*20),new(model.Theme.Muted,12));
             return new(new(new(0,0,width,height),new(0,0,0,0),[]),new(0,0,canvas.Commands,timer.Elapsed.TotalMilliseconds,model.Revision),[],[],errors);
         }
