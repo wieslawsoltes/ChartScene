@@ -13,7 +13,8 @@ public sealed record ChartExample(string Id,string Title,string Category,string 
 /// <summary>The application and browser regression suite consume these same independently reusable examples.</summary>
 public static class SampleCatalog
 {
-    public static IReadOnlyList<ChartExample> Examples { get; }=Build();
+    private static readonly Lazy<IReadOnlyList<ChartExample>> Catalog = new(Build);
+    public static IReadOnlyList<ChartExample> Examples => Catalog.Value;
     public static ChartExample Find(string id)=>Examples.FirstOrDefault(e=>e.Id.Equals(id,StringComparison.OrdinalIgnoreCase))??Examples[0];
     private static IReadOnlyList<ChartExample> Build()
     {
@@ -267,7 +268,7 @@ public static class SampleCatalog
         var model=CreateKind(SeriesKind.Candlestick); model.Title="Candlesticks and Bollinger bands";
         var candles=model.RenderableSeries[0]; var old=candles.DataSeries!.Snapshot(); var data=new OhlcDataSeries();
         double origin=new DateTimeOffset(2026,1,1,0,0,0,TimeSpan.Zero).ToUnixTimeMilliseconds();
-        double[] x=Enumerable.Range(0,old.Count).Select(i=>origin+i*86_400_000).ToArray(),close=old.Channel(4).ToArray();
+        double[] x=Enumerable.Range(0,old.Count).Select(i=>origin+i*86_400_000.0).ToArray(),close=old.Channel(4).ToArray();
         for(int i=0;i<old.Count;i++) data.Append(x[i],old[1,i],old[2,i],old[3,i],old[4,i]); candles.DataSeries=data;
         var bands=Indicators.BollingerBands(close); var bandData=new XyyDataSeries(); bandData.AppendRange(x,bands.Upper,bands.Lower);
         var band=Series(model,SeriesKind.Band,bandData,"Bollinger ±2σ",2); band.Fill=band.Stroke.WithAlpha(25); band.StrokeThickness=1;

@@ -67,7 +67,7 @@ public sealed class ChartModel:ObservableObject,IDisposable
     }
     public void ZoomExtents(bool visibleYOnly=false)
     {
-        foreach(var axis in XAxes) FitAxis(axis,true,null);
+        if(!visibleYOnly) foreach(var axis in XAxes) FitAxis(axis,true,null);
         foreach(var axis in YAxes) FitAxis(axis,false,visibleYOnly?XAxis.VisibleRange:null);
     }
     public void AutoRangeAxes()
@@ -106,7 +106,7 @@ public sealed class ChartModel:ObservableObject,IDisposable
             if(s.DataSeries is not { } data) continue;
             var snapshot=data.Snapshot();
             bool positive=axis.Scale==AxisScale.Logarithmic;
-            if(x) { Add(snapshot.Extents(0,null,positive)); continue; }
+            if(x != s.IsHorizontal) { Add(snapshot.Extents(0,null,positive)); continue; }
             if(stacks.TryGetValue(s,out var stack))
             {
                 double lo=double.PositiveInfinity,hi=double.NegativeInfinity;

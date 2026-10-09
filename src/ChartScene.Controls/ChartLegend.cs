@@ -50,5 +50,5 @@ public sealed class ChartLegend:UserControl,IDisposable
         foreach(var old in _observed) old.PropertyChanged-=SeriesChanged;
         _observed.Clear();
     }
-    public void Dispose()=>Detach();
+    public new void Dispose() { Detach(); base.Dispose(); }
 }

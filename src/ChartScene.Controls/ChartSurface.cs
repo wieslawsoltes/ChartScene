@@ -12,7 +12,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using SkiaSharp;
 using Uno.WinUI.Graphics2DSK;
-using Windows.Devices.Input;
+using Microsoft.UI.Input;
 using Windows.Foundation;
 using Windows.System;
 
@@ -138,18 +138,19 @@ public class ChartSurface:UserControl,IDisposable
         protected override string GetClassNameCore()=>nameof(ChartSurface);
         protected override AutomationControlType GetAutomationControlTypeCore()=>AutomationControlType.Custom;
         protected override string GetNameCore()=>owner.Model?.Title??"Chart";
-        protected override object GetPatternCore(PatternInterface pattern)=>pattern==PatternInterface.Value?this:base.GetPatternCore(pattern);
+        protected override object GetPatternCore(PatternInterface pattern)=>pattern==PatternInterface.Value?this:base.GetPatternCore(pattern)!;
         public bool IsReadOnly=>true;
         public string Value=>owner.Model is { } m?$"{m.Title}; {m.RenderableSeries.Count(s=>s.IsVisible)} visible series; X {m.XAxis.VisibleRange}; Y {m.YAxis.VisibleRange}":"No chart";
         public void SetValue(string value)=>throw new InvalidOperationException("Use the chart's keyboard navigation to change the viewport.");
     }
-    public void Dispose()
+    public new void Dispose()
     {
         if(_disposed) return; _disposed=true;
         if(_attached&&Model is not null) Model.Changed-=OnModelChanged;
         _attached=false;
         if(_controller is not null) { _controller.ViewChanged-=OnViewChanged; _controller.Dispose(); }
         _resources?.Dispose(); _resources=null;
+        base.Dispose();
     }
 }
 

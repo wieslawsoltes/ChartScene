@@ -197,7 +197,7 @@ public sealed class MainPage:Page
         {
             var previous=_model; _example=example; _model=example.Create(); _chart.Model=_model; previous?.Dispose();
             _breadcrumb.Text=example.Category+"  /  "+example.Title; _exampleTitle.Text=example.Title; _description.Text=example.Description; _source.Text=example.Source;
-            _model.ZoomExtents();
+            _model.AutoRangeAxes();
             if(example.Id=="live") { _model.XAxis.VisibleRange=new(0,10); _model.YAxis.VisibleRange=new(-1.5,1.5); }
             _legendToggle.IsChecked=_model.ShowLegend; _labelsToggle.IsChecked=_model.RenderableSeries.Any(s=>s.ShowDataLabels);
             _cursorToggle.IsChecked=true; _chart.Controller.AnnotationKind=_annotationKind.SelectedItem is AnnotationKind kind?kind:AnnotationKind.Box;
