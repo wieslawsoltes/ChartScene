@@ -14,7 +14,7 @@
     <WasmShellEnableThreads>false</WasmShellEnableThreads>
     <RunAOTCompilation>false</RunAOTCompilation>
     <WasmShellAppTitle>ChartScene — scientific charting</WasmShellAppTitle>
-    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../ChartScene.Controls/ChartScene.Controls.csproj" />
