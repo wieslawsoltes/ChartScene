@@ -1,0 +1,45 @@
+name: Finalize GPU integration
+on:
+  push:
+    branches: [work/parity-continuation]
+    paths: [.github/workflows/finalize-gpu.yml]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: python3 tools/finalize-gpu.py
+      - run: dotnet build src/ChartScene.Rendering.OpenGL -c Release
+      - run: dotnet run --project tests/ChartScene.Tests -c Release
+      - name: Commit tested integration edits
+        run: |
+          rm tools/finalize-gpu.py .github/workflows/finalize-gpu.yml
+          git config user.name 'Wiesław Šoltés'
+          git config user.email 'wieslawsoltes@users.noreply.github.com'
+          git add src tests tools .github/workflows/finalize-gpu.yml
+          git commit -m 'fix(gpu): normalize point-size query, gallery coordinates and exact wheel-anchor test'
+          git push origin HEAD:work/parity-continuation
+          git archive --format=zip --output=artifacts/source.zip HEAD
+          git rev-parse HEAD > artifacts/validated-commit.txt
+      - name: Preserve all GPU dependencies
+        if: always()
+        shell: python
+        run: |
+          import tarfile
+          from pathlib import Path
+          Path('artifacts').mkdir(exist_ok=True)
+          root=Path.home()/'.nuget/packages'
+          with tarfile.open('artifacts/gpu-dependencies.tar.gz','w:gz') as tar:
+              for p in root.iterdir():
+                  if p.name.startswith(('silk.net.','ultz.','microsoft.dotnet.platformabstractions','microsoft.extensions.dependencymodel')):
+                      tar.add(p,arcname=p.name)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gpu-integration
+          path: artifacts/

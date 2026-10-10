@@ -14,7 +14,7 @@ public sealed partial class App:Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         MainWindow=new Window{Title="ChartScene — scientific charting"};
-        try { MainWindow.Content=new MainPage(); }
+        try { MainWindow.Content=new GalleryShell(); }
         catch(Exception error)
         {
             Console.Error.WriteLine(error); PlatformBridge.ReportFailure(error.ToString());
