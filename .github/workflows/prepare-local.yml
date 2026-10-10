@@ -1,0 +1,56 @@
+name: Prepare local validation toolchain
+on:
+  push:
+    branches: [work/parity-continuation]
+    paths: [.github/workflows/prepare-local.yml]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore tests/ChartScene.Tests/ChartScene.Tests.csproj
+      - name: Archive exact source and lean SDK
+        shell: python
+        run: |
+          from pathlib import Path
+          import shutil,subprocess,tarfile
+          root=Path(shutil.which('dotnet')).resolve().parent
+          out=Path('artifacts'); out.mkdir()
+          sdk=subprocess.check_output(['dotnet','--version'],text=True).strip()
+          def latest(folder):
+              return sorted((p for p in (root/folder).iterdir() if p.name.startswith('10.')),key=lambda p:tuple(int(v) for v in p.name.split('.')))[-1]
+          with tarfile.open(out/'sdk.tar.gz','w:gz',compresslevel=1) as t:
+              t.add(root/'dotnet',arcname='dotnet/dotnet')
+              t.add(root/'sdk'/sdk,arcname='dotnet/sdk/'+sdk)
+              for folder in ['host/fxr','shared/Microsoft.NETCore.App','packs/Microsoft.NETCore.App.Ref','packs/Microsoft.NETCore.App.Host.linux-x64']:
+                  p=latest(folder);t.add(p,arcname='dotnet/'+folder+'/'+p.name)
+          with tarfile.open(out/'deps.tar.gz','w:gz',compresslevel=1) as t:
+              packages=Path.home()/'.nuget/packages'
+              for name in ['skiasharp','skiasharp.harfbuzz','skiasharp.nativeassets.linux','harfbuzzsharp','harfbuzzsharp.nativeassets.linux','skiasharp.nativeassets.win32','skiasharp.nativeassets.macos','harfbuzzsharp.nativeassets.win32','harfbuzzsharp.nativeassets.macos']:
+                  p=packages/name
+                  if p.exists():t.add(p,arcname='nuget/'+name)
+          subprocess.run(['git','archive','--format=zip','--output=artifacts/source.zip','HEAD'],check=True)
+          subprocess.run(['git','bundle','create','artifacts/history.bundle','HEAD'],check=True)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lean-sdk
+          path: artifacts/sdk.tar.gz
+          compression-level: 0
+          retention-days: 3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: numerical-dependencies
+          path: artifacts/deps.tar.gz
+          compression-level: 0
+          retention-days: 3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: recovered-source
+          path: |
+            artifacts/source.zip
+            artifacts/history.bundle
