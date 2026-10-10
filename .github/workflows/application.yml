@@ -18,29 +18,61 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
-      - name: Apply pending bootstrap corrections
-        run: if [ -f tools/bootstrap-fixes.py ]; then python3 tools/bootstrap-fixes.py; fi
-      - name: Install WebAssembly toolchain
-        run: dotnet workload install wasm-tools --skip-manifest-update
-      - name: Compile desktop application
-        shell: bash
+      - run: dotnet workload install wasm-tools --skip-manifest-update
+      - name: Validate libraries
+        run: dotnet run --project tests/ChartScene.Tests -c Release
+      - name: Compile desktop
         run: |
           set -euo pipefail
           mkdir -p artifacts/logs
-          dotnet build src/ChartScene.App/ChartScene.App.csproj -c Release -f net10.0-desktop 2>&1 | tee artifacts/logs/desktop.log
-      - name: Publish browser application
-        shell: bash
+          dotnet build src/ChartScene.App -c Release -f net10.0-desktop 2>&1 | tee artifacts/logs/desktop.log
+      - name: Publish browser
         run: |
           set -euo pipefail
-          dotnet publish src/ChartScene.App/ChartScene.App.csproj -c Release -f net10.0-browserwasm -o artifacts/publish -p:WasmShellWebAppBasePath=./ 2>&1 | tee artifacts/logs/browser-publish.log
-      - name: Stage browser site
+          dotnet publish src/ChartScene.App -c Release -f net10.0-browserwasm -o artifacts/publish -p:WasmShellWebAppBasePath=./ 2>&1 | tee artifacts/logs/browser.log
+      - name: Stage current-commit site
         id: stage
         run: python3 tools/stage-site.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install playwright==1.56.0 pillow
+      - run: python -m playwright install --with-deps chromium
+      - name: Validate compiled browser at repository base path
+        run: |
+          mkdir -p artifacts/server/ChartScene
+          cp -a artifacts/site/. artifacts/server/ChartScene/
+          python -m http.server 8765 --bind 127.0.0.1 --directory artifacts/server > artifacts/logs/server.log 2>&1 &
+          server=$!
+          trap 'kill "$server"' EXIT
+          python tests/browser/validate.py --url http://127.0.0.1:8765/ChartScene/ --catalog
+      - name: Package reusable libraries
+        run: |
+          set -euo pipefail
+          for project in Core Data Numerics Charting Rendering Rendering.Skia Interaction Controls Samples; do
+            dotnet pack "src/ChartScene.$project" -c Release -o artifacts/packages
+          done
+      - name: Preserve exact source
+        if: always()
+        run: |
+          mkdir -p artifacts
+          git rev-parse HEAD > artifacts/validated-commit.txt
+          git archive --format=zip --output=artifacts/source.zip HEAD
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: application-logs
-          path: artifacts/logs/
+          name: application-validation
+          path: |
+            artifacts/logs/
+            artifacts/browser-tests/
+            artifacts/core-tests.json
+            artifacts/validated-commit.txt
+            artifacts/source.zip
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: reusable-packages
+          path: artifacts/packages/
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() && steps.stage.outcome == 'success' }}
         with:
@@ -48,3 +80,27 @@ jobs:
           path: artifacts/site/
           include-hidden-files: true
           if-no-files-found: error
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: browser-and-desktop
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: browser-app
+          path: site
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
