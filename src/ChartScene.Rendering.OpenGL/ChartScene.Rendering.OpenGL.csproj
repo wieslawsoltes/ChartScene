@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><AllowUnsafeBlocks>true</AllowUnsafeBlocks><IsPackable>true</IsPackable><Description>Persistent-buffer OpenGL 3.3 / OpenGL ES 3 / WebGL 2 chart rendering, independent of Uno.</Description></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ChartScene.ThreeD/ChartScene.ThreeD.csproj" />
+    <PackageReference Include="Silk.NET.OpenGL" Version="2.23.0" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,39 @@
+name: GPU renderer
+on:
+  push:
+    branches: [main, work/parity-continuation]
+    paths: [src/ChartScene.Rendering.OpenGL/**, .github/workflows/gpu.yml]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Compile independent GPU backend
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          dotnet build src/ChartScene.Rendering.OpenGL -c Release 2>&1 | tee artifacts/gpu-build.log
+      - name: Preserve GPU dependency cache for local validation
+        if: always()
+        shell: python
+        run: |
+          import tarfile
+          from pathlib import Path
+          Path('artifacts').mkdir(exist_ok=True)
+          with tarfile.open('artifacts/gpu-dependencies.tar.gz','w:gz') as archive:
+              root=Path.home()/'.nuget/packages'
+              for path in root.iterdir():
+                  if path.name.startswith(('silk.net.','ultz.')):
+                      archive.add(path,arcname=path.name)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gpu-build
+          path: artifacts/
+          retention-days: 3

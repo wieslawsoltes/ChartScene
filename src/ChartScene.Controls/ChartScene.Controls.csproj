@@ -6,9 +6,10 @@
     <GenerateLibraryLayout>true</GenerateLibraryLayout>
     <UnoFeatures>SkiaRenderer;GLCanvas;</UnoFeatures>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Description>Reusable Uno chart surfaces, legends, overview navigation and chart editors.</Description>
+    <Description>Reusable Uno 2D and GPU 3D chart surfaces and legends.</Description>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../ChartScene.Rendering.OpenGL/ChartScene.Rendering.OpenGL.csproj" />
     <ProjectReference Include="../ChartScene.Interaction/ChartScene.Interaction.csproj" />
     <ProjectReference Include="../ChartScene.Rendering.Skia/ChartScene.Rendering.Skia.csproj" />
   </ItemGroup>
