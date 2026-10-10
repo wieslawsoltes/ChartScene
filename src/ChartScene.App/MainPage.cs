@@ -321,7 +321,7 @@ public sealed class MainPage:Page
         if(!element.IsLoaded||element.Visibility!=Visibility.Visible||element.ActualWidth<=0||element.ActualHeight<=0) return null;
         try
         {
-            var position=element.TransformToVisual(_root).TransformPoint(new Point(0,0));
+            var position=element.TransformToVisual(null).TransformPoint(new Point(0,0));
             return new(position.X,position.Y,element.ActualWidth,element.ActualHeight);
         }
         catch(InvalidOperationException) { return null; }

@@ -35,7 +35,8 @@ public sealed unsafe class OpenGlChartRenderer : IDisposable
         string version = gl.GetStringS(StringName.Version), shaderVersion = gl.GetStringS(StringName.ShadingLanguageVersion);
         _es = shaderVersion.Contains("ES", StringComparison.OrdinalIgnoreCase) || version.Contains("WebGL", StringComparison.OrdinalIgnoreCase);
         Driver = $"{gl.GetStringS(StringName.Renderer)} · {version}";
-        float* pointRange = stackalloc float[2]; gl.GetFloat(GLEnum.AliasedPointSizeRange, pointRange);
+        float* pointRange = stackalloc float[2]; // ES ALIASED_POINT_SIZE_RANGE (0x846D) is not exposed by the desktop binding enum.
+        gl.GetFloat((GLEnum)(_es ? 0x846D : 0x0B12), pointRange);
         _maxPointSize = Math.Max(1, pointRange[1]);
         try
         {
