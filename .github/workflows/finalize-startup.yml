@@ -1,0 +1,32 @@
+name: Finalize generated startup contracts
+on:
+  push:
+    branches: [work/parity-continuation]
+    paths: [.github/workflows/finalize-startup.yml]
+permissions:
+  contents: write
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: python3 tools/apply-startup-fix.py
+      - run: dotnet run --project tests/ChartScene.Tests -c Release
+      - name: Commit validated contracts
+        run: |
+          rm tools/apply-startup-fix.py .github/workflows/finalize-startup.yml
+          git config user.name 'Wiesław Šoltés'
+          git config user.email 'wieslawsoltes@users.noreply.github.com'
+          git add src tools .github/workflows/finalize-startup.yml
+          git commit -m 'fix(browser): replace anonymous diagnostic types with trim-safe generated contracts'
+          git push origin HEAD:work/parity-continuation
+          git rev-parse HEAD > artifacts/validated-commit.txt
+          git archive --format=zip --output=artifacts/source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: startup-contract-validation
+          path: artifacts/

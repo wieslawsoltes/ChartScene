@@ -4,5 +4,6 @@ public static partial class AdditionalTests
     {
         SkiaTests.Register(suite);
         SampleTests.Register(suite);
+        DiagnosticTests.Register(suite);
     }
 }
