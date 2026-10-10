@@ -24,8 +24,9 @@ public sealed class RenderableSeries3D:ObservableObject,IDisposable
     private SurfaceDrawMode _drawMode;
     private IPaletteProvider3D? _palette;
     public string Id { get; }=Guid.NewGuid().ToString("N");
+    public HashSet<int> SelectedIndices { get; } = [];
     public SeriesKind3D Kind { get; }
-    public int RequiredChannels=>Kind==SeriesKind.Bubble?4:Kind==SeriesKind.ErrorBars?9:3;
+    public int RequiredChannels=>Kind==SeriesKind3D.Bubble?4:Kind==SeriesKind3D.ErrorBars?9:3;
     public string SeriesName { get=>_name; set=>Set(ref _name,value??""); }
     public bool IsVisible { get=>_visible; set=>Set(ref _visible,value); }
     public bool EnableLighting { get=>_lighting; set=>Set(ref _lighting,value); }
@@ -132,7 +133,7 @@ public sealed class ChartModel3D:ObservableObject,IDisposable
             if(series.SurfaceData is { } surface)
             {
                 foreach(double value in (channel==0?surface.XCoordinates:channel==1?surface.Heights:surface.ZCoordinates).Span) Include(value);
-                if(channel==1&&series.Kind==SeriesKind.Waterfall) Include(series.ZeroLineY);
+                if(channel==1&&series.Kind==SeriesKind3D.Waterfall) Include(series.ZeroLineY);
             }
             if(series.MeshData is { } mesh) foreach(var point in mesh.Positions.Span) Include(point.Component(channel));
             if(series.DataSeries is { } source)
@@ -141,14 +142,14 @@ public sealed class ChartModel3D:ObservableObject,IDisposable
                 for(int i=0;i<data.Count;i++)
                 {
                     Include(data[channel,i]);
-                    if(series.Kind==SeriesKind.Column&&channel!=1)
+                    if(series.Kind==SeriesKind3D.Column&&channel!=1)
                     {
                         double half=(channel==0?series.ColumnWidthX:series.ColumnWidthZ)/2;
                         Include(data[channel,i]-half); Include(data[channel,i]+half);
                     }
-                    if(series.Kind==SeriesKind.ErrorBars) { Include(data[3+channel*2,i]); Include(data[4+channel*2,i]); }
+                    if(series.Kind==SeriesKind3D.ErrorBars) { Include(data[3+channel*2,i]); Include(data[4+channel*2,i]); }
                 }
-                if(channel==1&&series.Kind is SeriesKind.Column or SeriesKind.Impulse) Include(series.ZeroLineY);
+                if(channel==1&&series.Kind is SeriesKind3D.Column or SeriesKind3D.Impulse) Include(series.ZeroLineY);
             }
         }
         if(!double.IsFinite(min)) return;
@@ -168,9 +169,9 @@ public sealed class ChartModel3D:ObservableObject,IDisposable
         var errors=new List<string>();
         foreach(var series in RenderableSeries.Where(s=>s.IsVisible))
         {
-            if(series.Kind is SeriesKind.SurfaceMesh or SeriesKind.Waterfall)
+            if(series.Kind is SeriesKind3D.SurfaceMesh or SeriesKind3D.Waterfall)
             { if(series.SurfaceData is null) errors.Add($"'{series.SeriesName}' requires surface data."); }
-            else if(series.Kind==SeriesKind.Mesh)
+            else if(series.Kind==SeriesKind3D.Mesh)
             { if(series.MeshData is null) errors.Add($"'{series.SeriesName}' requires indexed mesh data."); }
             else if(series.DataSeries is null) errors.Add($"'{series.SeriesName}' requires {series.RequiredChannels}-channel data.");
         }
