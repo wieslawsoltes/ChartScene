@@ -66,6 +66,9 @@ public sealed class StackedDataPage : Page
     {
         var next = _model.RenderableSeries[0].StackMode == StackMode.Absolute ? StackMode.Percent : StackMode.Absolute;
         foreach (var series in _model.RenderableSeries) series.StackMode = next;
+        // Switching value units after a user zoom must refit Y, not clip percent values
+        // inside the former absolute viewport. X navigation is intentionally retained.
+        _model.YAxis.AutoRange = AutoRange.Always;
         _model.YAxis.AxisTitle = next == StackMode.Percent ? "Contribution (%)" : "Amplitude";
     });
     private void Edit() => Batch(() =>

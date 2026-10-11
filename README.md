@@ -127,16 +127,20 @@ python3 tools/stage-site.py
 python3 -m http.server 8765 --directory artifacts/site
 ```
 
-Open the served root for 2D, `?view=3d` for 3D, `?view=linked` for linked charts, `?view=colors` for color legends, or `?view=overview` for overview navigation. Use HTTP/HTTPS rather than `file://`.
+Open the served root for 2D, `?view=3d` for 3D, `?view=linked` for linked charts, `?view=colors` for color legends, `?view=overview` for overview navigation, or `?view=stacks` for stacked data. Use HTTP/HTTPS rather than `file://`.
 
 The gallery includes example search, 29 2D series kinds, multiple numeric/log/date axes, annotations, selection, navigation history, a million-sample example, real-time FIFO streaming, themes and actual PNG/CSV downloads. The 3D gallery includes camera orbit/pan/zoom, projections, surface/grid modes, legends, picking and selection.
 
 ## Validation and deployment
 
-[Application CI](.github/workflows/application.yml) builds both Uno targets, serves the exact publish output at `/ChartScene/`, tests all five galleries through real browser input, packages all 12 libraries and compiles isolated package-only consumers. A native EGL job renders every 3D fixture through both desktop GL and GLES.
+[Application CI](.github/workflows/application.yml) builds both Uno targets, serves the exact publish output at `/ChartScene/`, tests all six galleries through real browser input, packages all 12 libraries and compiles isolated package-only consumers. A native EGL job renders every 3D fixture through both desktop GL and GLES.
 
 Pages deployment is gated on successful application and GPU jobs on `main`. Artifact existence or a successful publish alone is not deployment or runtime validation. `build-info.json` identifies the staged source commit. See [validation evidence and limits](docs/validation.md) and [remaining compatibility scope](docs/parity-status.md).
 
 ## License
 
 MIT; see [LICENSE](LICENSE). Third-party dependencies retain their own licenses. Familiar API names do not imply WPF binary compatibility.
+
+## Data integrity and stack performance review
+
+See [mutation, hit-testing and graphics review](docs/reviews/data-integrity-performance.md) and [shared stack generations and notification batching](docs/reviews/stack-cache-notifications.md). The **Stacked Data** gallery (`?view=stacks`) exercises atomic data updates, observable configuration and cache reuse through real Uno controls.

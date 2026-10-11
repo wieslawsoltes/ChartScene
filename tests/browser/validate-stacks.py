@@ -69,6 +69,7 @@ with sync_playwright() as p:
             assert after['mode'] == 'Percent' and after['stackBuild'] == before['stackBuild']+1
             assert after['batchNotifications'] == 1 and after['revisions'] == before['revisions']
             assert all(abs(v-100)<1e-8 for v in after['top'])
+            pixels()
             page.screenshot(path=str(out/'percent-stacks.png'))
         test('runtime percent mode redraws and batches notifications', mode)
         def edit():
