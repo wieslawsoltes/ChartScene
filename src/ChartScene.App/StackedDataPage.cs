@@ -106,7 +106,7 @@ public sealed class StackedDataPage : Page
         Register(id, button); return button;
     }
     private void Register(string id, FrameworkElement element)
-    { _controls[id] = element; AutomationProperties.SetAutomationId(element, "stacks-" + id); }
+    { _controls[id] = element; AutomationProperties.SetAutomationId(element, "stacks-" + id); UiInputTrace.Register(element,"stacks-"+id); }
     private static ControlBounds? Bounds(FrameworkElement element)
     {
         if (!element.IsLoaded || element.ActualWidth <= 0 || element.ActualHeight <= 0) return null;
@@ -125,7 +125,7 @@ public sealed class StackedDataPage : Page
             top = [values.Upper[0], values.Upper[values.Upper.Count / 2], values.Upper[^1]];
         var plot = _chart.LastFrame?.Layout.PlotArea ?? default; var origin = _chart.TransformToVisual(null).TransformPoint(new Point(0, 0));
         var snapshot = new StackedDataSnapshot(ready, error, _generation, _edits, _lastBatchNotifications,
-            _chart.FrameCount, _renderedStack?.BuildNumber ?? 0, _renderedStack?.SourcePoints ?? 0,
+            _chart.FrameCount, _chart.SceneCacheStatistics.SceneBuilds, _chart.SceneCacheStatistics.SceneReplays, _renderedStack?.BuildNumber ?? 0, _renderedStack?.SourcePoints ?? 0,
             _model.RenderableSeries[0].StackMode.ToString(), _model.RenderableSeries[1].IsVisible, _model.Theme.Name,
             _model.XAxis.VisibleRange.Min, _model.XAxis.VisibleRange.Max, _chart.Controller.View.Hits.Count,
             _model.RenderableSeries.Select(s => s.DataSeries!.Revision).ToArray(), top,
@@ -135,7 +135,7 @@ public sealed class StackedDataPage : Page
     }
 }
 public sealed record StackedDataSnapshot(bool ready, string? error, int generation, int edits, int batchNotifications,
-    long frames, long stackBuild, long sourcePoints, string mode, bool middleVisible, string theme,
+    long frames, long sceneBuilds, long sceneReplays, long stackBuild, long sourcePoints, string mode, bool middleVisible, string theme,
     double min, double max, int hits, long[] revisions, double[] top, ControlBounds plot, Dictionary<string, ControlBounds?> controls);
 [JsonSerializable(typeof(StackedDataSnapshot))]
 public partial class StackedDataJsonContext : JsonSerializerContext;

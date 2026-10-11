@@ -7,6 +7,7 @@ import time
 import traceback
 from PIL import Image
 from playwright.sync_api import sync_playwright
+from uno_input import UnoInput
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--url', default='http://127.0.0.1:8765/ChartScene/')
@@ -20,12 +21,23 @@ with sync_playwright() as p:
     page = context.new_page(); page.set_default_timeout(20_000)
     page.on('pageerror',lambda e: logs.append({'type':'pageerror','text':str(e)}))
     page.on('console',lambda e: logs.append({'type':e.type,'text':e.text}))
+    input_driver = UnoInput(page, out)
     def state(): return page.evaluate('window.chartScene3D || {}')
     def ready(identifier=None):
         page.wait_for_function('''id=>{const s=window.chartScene3D;if(s?.error)throw new Error(s.error);return s?.ready&&(!id||s.exampleId===id)}''',arg=identifier,timeout=120_000)
     def click(name):
         page.wait_for_function('n=>window.chartScene3D?.controls?.[n]?.width>0',arg=name)
-        b=state()['controls'][name];page.mouse.click(b['x']+b['width']/2,b['y']+b['height']/2);page.wait_for_timeout(180)
+        b=state()['controls'][name];input_driver.click('3d-'+name,b)
+    def combo(name,index):
+        click(name)
+        page.wait_for_function('n=>window.chartScene3D[n+"DropDownOpen"]===true',arg=name)
+        page.keyboard.press('Home')
+        page.wait_for_function('n=>window.chartScene3D[n+"FocusedIndex"]===0',arg=name)
+        for i in range(index):
+            page.keyboard.press('ArrowDown')
+            page.wait_for_function('p=>window.chartScene3D[p.name+"FocusedIndex"]===p.index',arg={'name':name,'index':i+1})
+        page.keyboard.press('Enter')
+        page.wait_for_function('n=>window.chartScene3D[n+"DropDownOpen"]===false',arg=name)
     def point(x=.5,y=.5):
         b=state()['controls']['chart'];return (int(b['x']+x*b['width']),int(b['y']+y*b['height']))
     def frame_after(old): page.wait_for_function('n=>window.chartScene3D.frames>n',arg=old)
@@ -63,7 +75,7 @@ with sync_playwright() as p:
             (out/'results.json').write_text(json.dumps({'total':len(results),'failed':sum(not t['passed'] for t in results),'tests':results},indent=2))
             (out/'console.json').write_text(json.dumps(logs,indent=2))
     try:
-        page.goto(args.url+'?view=3d',wait_until='domcontentloaded')
+        page.goto(args.url+'?view=3d&inputTrace=1',wait_until='domcontentloaded')
         test('3D GPU startup',lambda:ready('surfacemesh'))
         if not state().get('ready'):raise RuntimeError('GPU startup failed; no following results are meaningful')
         test('3D surface visible pixels',lambda:rendered_pixels('surface-initial'))
@@ -97,13 +109,13 @@ with sync_playwright() as p:
             click('grid');page.wait_for_function('window.chartScene3D.grid===false');rendered_pixels('surface-no-grid');click('grid');page.wait_for_function('window.chartScene3D.grid===true')
         test('3D grid toggle',grid)
         def wireframe():
-            click('surface');page.keyboard.press('Home');page.keyboard.press('ArrowDown');page.keyboard.press('Enter');page.wait_for_function("window.chartScene3D.surfaceMode==='Wireframe'")
+            combo('surface',1);page.wait_for_function("window.chartScene3D.surfaceMode==='Wireframe'")
             screenshot('wireframe')
-            click('surface');page.keyboard.press('Home');page.keyboard.press('Enter');page.wait_for_function("window.chartScene3D.surfaceMode==='Solid'")
+            combo('surface',0);page.wait_for_function("window.chartScene3D.surfaceMode==='Solid'")
         test('3D solid wireframe modes',wireframe)
         def theme():
-            click('theme');page.keyboard.press('Home');page.keyboard.press('ArrowDown');page.keyboard.press('Enter');page.wait_for_function("window.chartScene3D.theme==='Light'");rendered_pixels('surface-light')
-            click('theme');page.keyboard.press('Home');page.keyboard.press('Enter');page.wait_for_function("window.chartScene3D.theme==='Dark'")
+            combo('theme',1);page.wait_for_function("window.chartScene3D.theme==='Light'");rendered_pixels('surface-light')
+            combo('theme',0);page.wait_for_function("window.chartScene3D.theme==='Dark'")
         test('3D theme control',theme)
         def selection():
             click('fit');page.mouse.click(*point(.5,.52));page.wait_for_function('window.chartScene3D.selected>0');click('undo');page.wait_for_function('window.chartScene3D.selected===0')

@@ -23,6 +23,10 @@ public sealed class ThreeDDiagnosticSnapshot
     public bool grid { get; init; }
     public string surfaceMode { get; init; } = "";
     public string theme { get; init; } = "";
+    public bool surfaceDropDownOpen { get; init; }
+    public bool themeDropDownOpen { get; init; }
+    public int surfaceFocusedIndex { get; init; }
+    public int themeFocusedIndex { get; init; }
     public CameraSnapshotDto? camera { get; init; }
     public Dictionary<string, ControlBounds?> controls { get; init; } = [];
     public CatalogEntryDto[] catalog { get; init; } = [];

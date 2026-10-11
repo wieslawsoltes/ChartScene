@@ -7,6 +7,7 @@ import time
 import traceback
 from PIL import Image
 from playwright.sync_api import sync_playwright
+from uno_input import UnoInput
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--url', default='http://127.0.0.1:8765/ChartScene/')
@@ -20,13 +21,13 @@ with sync_playwright() as playwright:
     page = context.new_page(); page.set_default_timeout(20_000)
     page.on('pageerror', lambda e: logs.append({'type': 'pageerror', 'text': str(e)}))
     page.on('console', lambda e: logs.append({'type': e.type, 'text': e.text}))
+    input_driver = UnoInput(page, out)
     def state(): return page.evaluate('window.chartSceneLinked || {}')
     def ready():
         page.wait_for_function('''() => { const s=window.chartSceneLinked; if(s?.error) throw new Error(s.error); return s?.ready; }''', timeout=120_000)
     def click(name):
         b = state()['controls'][name]
-        page.mouse.click(b['x'] + b['width']/2, b['y'] + b['height']/2)
-        page.wait_for_timeout(180)
+        input_driver.click('linked-'+name,b)
     def move(view, x=.4, y=.6):
         b = state()[view]['plot']
         page.mouse.move(b['x']+b['width']*x, b['y']+b['height']*y)
@@ -49,7 +50,7 @@ with sync_playwright() as playwright:
             (out/'results.json').write_text(json.dumps({'total':len(results), 'failed':sum(not r['passed'] for r in results), 'tests':results}, indent=2))
             (out/'console.json').write_text(json.dumps(logs, indent=2))
     try:
-        page.goto(args.url+'?view=linked', wait_until='domcontentloaded')
+        page.goto(args.url+'?view=linked&inputTrace=1', wait_until='domcontentloaded')
         test('linked page startup', ready)
         if not state().get('ready'): raise RuntimeError('Linked page failed to start')
         def cursors():

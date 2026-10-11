@@ -120,7 +120,7 @@ public sealed class LinkedChartsPage : Page
     }
     private void Register(string id, FrameworkElement element)
     {
-        _controls[id] = element; AutomationProperties.SetAutomationId(element, "linked-" + id);
+        _controls[id] = element; AutomationProperties.SetAutomationId(element, "linked-" + id); UiInputTrace.Register(element,"linked-"+id);
     }
     private static ControlBounds? Bounds(FrameworkElement element)
     {

@@ -7,6 +7,7 @@ import time
 import traceback
 from PIL import Image
 from playwright.sync_api import sync_playwright
+from uno_input import UnoInput
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--url', default='http://127.0.0.1:8765/ChartScene/')
@@ -20,12 +21,13 @@ with sync_playwright() as p:
     page.set_default_timeout(20_000)
     page.on('pageerror', lambda e: logs.append({'type': 'pageerror', 'text': str(e)}))
     page.on('console', lambda e: logs.append({'type': e.type, 'text': e.text}))
+    input_driver = UnoInput(page, out)
     def state(): return page.evaluate('window.chartSceneStacks || {}')
     def ready():
         page.wait_for_function('''() => {const s=window.chartSceneStacks;if(s?.error)throw new Error(s.error);return s?.ready;}''', timeout=120_000)
     def click(name):
         b = state()['controls'][name]; old = state()['frames']
-        page.mouse.click(b['x']+b['width']/2, b['y']+b['height']/2)
+        input_driver.click('stacks-'+name,b)
         page.wait_for_function('old => window.chartSceneStacks.frames>old && window.chartSceneStacks.ready', arg=old)
     def point(x=.5, y=.65):
         b = state()['plot']; return (b['x']+b['width']*x, b['y']+b['height']*y)
@@ -42,14 +44,22 @@ with sync_playwright() as p:
             (out/'results.json').write_text(json.dumps({'total': len(results), 'failed': sum(not r['passed'] for r in results), 'tests': results}, indent=2))
             (out/'console.json').write_text(json.dumps(logs, indent=2))
     try:
-        page.goto(args.url+'?view=stacks', wait_until='domcontentloaded')
+        page.goto(args.url+'?view=stacks&inputTrace=1', wait_until='domcontentloaded')
         test('stacked data startup', ready)
         if not state().get('ready'): raise RuntimeError('Stacked data page did not start')
         def pixels():
-            path = out/'stacked-data.png'; page.screenshot(path=str(path)); b = state()['plot']
-            with Image.open(path) as image:
-                crop = image.convert('RGB').crop((int(b['x']), int(b['y']), int(b['x']+b['width']), int(b['y']+b['height'])))
-                assert sum(max(c)-min(c)>45 and max(c)>100 for c in crop.resize((300,180)).getdata()) > 500
+            samples=[]; consecutive=0; start=time.perf_counter()
+            while True:
+                path=out/'stacked-data.png'; page.screenshot(path=str(path)); b=state()['plot']
+                with Image.open(path) as image:
+                    crop=image.convert('RGB').crop((int(b['x']),int(b['y']),int(b['x']+b['width']),int(b['y']+b['height'])))
+                    count=sum(max(c)-min(c)>45 and max(c)>100 for c in crop.resize((300,180)).getdata())
+                samples.append({'elapsedMs':(time.perf_counter()-start)*1000,'coloredPixels':count})
+                consecutive=consecutive+1 if count>500 else 0
+                if consecutive>=2 or time.perf_counter()-start>8: break
+                page.wait_for_timeout(100)
+            (out/'presentation.json').write_text(json.dumps(samples,indent=2))
+            assert consecutive>=2, samples
         test('stacked data visible geometry', pixels)
         def rollover():
             before = state()
@@ -57,6 +67,8 @@ with sync_playwright() as p:
             page.wait_for_function('n=>window.chartSceneStacks.frames>n && window.chartSceneStacks.hits===3', arg=before['frames'])
             assert state()['stackBuild'] == before['stackBuild']
             assert state()['revisions'] == before['revisions']
+            assert state()['sceneBuilds'] == before['sceneBuilds']
+            assert state()['sceneReplays'] > before['sceneReplays']
         test('rollover reuses stacked generation', rollover)
         def zoom():
             before = state(); page.mouse.move(*point(.4)); page.mouse.wheel(0, -240)
@@ -106,7 +118,7 @@ with sync_playwright() as p:
             before = state()
             for name in ['gallery-2d', 'gallery-stacks']:
                 b = page.evaluate('n=>window.chartSceneGallery.controls[n]', name)
-                page.mouse.click(b['x']+b['width']/2, b['y']+b['height']/2)
+                page.mouse.click(b['x']+b['width']/2,b['y']+b['height']/2)
                 page.wait_for_function('v=>window.chartSceneGallery.view===v', arg='2d' if name=='gallery-2d' else 'stacks')
             page.wait_for_function('n=>window.chartSceneStacks.frames>n && window.chartSceneStacks.ready', arg=before['frames'])
             assert state()['stackBuild'] == before['stackBuild'] and state()['revisions'] == before['revisions']
