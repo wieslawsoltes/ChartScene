@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFramework>net10.0</TargetFramework><IsPackable>true</IsPackable><Description>Deterministic, reusable scientific and financial chart examples and streaming data sources.</Description></PropertyGroup>
-  <ItemGroup><ProjectReference Include="../ChartScene.Charting/ChartScene.Charting.csproj" /></ItemGroup>
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><IsPackable>true</IsPackable><Description>Deterministic, reusable scientific and financial chart examples, source browser and streaming data sources.</Description></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ChartScene.Charting/ChartScene.Charting.csproj" />
+    <EmbeddedResource Include="SampleCatalog.cs" LogicalName="ChartScene.Samples.SampleCatalog.cs" />
+  </ItemGroup>
 </Project>
