@@ -29,7 +29,7 @@ public sealed class MainPage : Page
     private readonly ColumnDefinition _navigationColumn = new() { Width = new GridLength(0) };
     private readonly ColumnDefinition _inspectorColumn = new() { Width = new GridLength(285) };
     private readonly ListView _navigation = new() { SelectionMode = ListViewSelectionMode.Single, Padding = new Thickness(5), BorderThickness = new Thickness(0) };
-    private readonly TextBox _search = new() { PlaceholderText = "Search examples, source code and more…", FontSize = 12, MinWidth = 130, MaxWidth = 480, Height = 32, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBox _search = new() { PlaceholderText = "Search examples, source code and more…", MaxLength = 4096, FontSize = 12, MinWidth = 130, MaxWidth = 480, Height = 32, VerticalAlignment = VerticalAlignment.Center };
     private readonly ChartSurface _chart = new() { MinHeight = 100 };
     private readonly TextBlock _status = new() { FontSize = 10, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
     private readonly TextBlock _breadcrumb = new() { FontSize = 11, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -102,7 +102,7 @@ public sealed class MainPage : Page
         };
         Unloaded += (_, _) => { _statusTimer.Stop(); PauseStream(); };
         SizeChanged += (_, _) => ResizeWorkspace();
-        Shortcut(VirtualKey.F,VirtualKeyModifiers.Control,()=>_search.Focus(FocusState.Keyboard));
+        Shortcut(VirtualKey.F,VirtualKeyModifiers.Control,()=>{_search.Focus(FocusState.Keyboard);_search.SelectAll();});
         Shortcut(VirtualKey.Left,VirtualKeyModifiers.Menu,()=>_journal.GoBack());
         Shortcut(VirtualKey.Right,VirtualKeyModifiers.Menu,()=>_journal.GoForward());
     }
