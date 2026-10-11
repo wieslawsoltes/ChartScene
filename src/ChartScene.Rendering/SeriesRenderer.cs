@@ -38,13 +38,13 @@ public sealed partial class ChartRenderer
         }
         if(series.ShowDataLabels) DrawDataLabels(c,model,series,data,indices,projection,stack);
     }
-    private static int[] VisibleIndices(ChartModel model,RenderableSeries series,SeriesSnapshot data,SeriesProjection p)
+    private int[] VisibleIndices(ChartModel model,RenderableSeries series,SeriesSnapshot data,SeriesProjection p)
     {
         bool cartesian=model.CoordinateSystem==CoordinateSystem.Cartesian&&series.Kind is not (SeriesKind.PolarLine or SeriesKind.Radar or SeriesKind.TernaryLine or SeriesKind.TernaryScatter);
         if(!cartesian) return Enumerable.Range(0,data.Count).ToArray();
         bool reduce=series.Kind is SeriesKind.Line or SeriesKind.DigitalLine or SeriesKind.Mountain or SeriesKind.Impulse;
         if(reduce&&series.IsResamplingEnabled&&series.PaletteProvider is null)
-            return Resampling.MinMax(data,series.YChannel,p.XAxis.VisibleRange,Math.Max(1,(int)(p.XAxis.IsVertical?p.Plot.Height:p.Plot.Width)));
+            return SampleIndices(series,data,p.XAxis.VisibleRange,Math.Max(1,(int)(p.XAxis.IsVertical?p.Plot.Height:p.Plot.Width)),p.XAxis.Scale==AxisScale.Logarithmic);
         var(start,end)=data.VisibleIndices(p.XAxis.VisibleRange);
         return Enumerable.Range(start,end-start).ToArray();
     }

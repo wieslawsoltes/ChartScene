@@ -69,6 +69,9 @@ with sync_playwright() as p:
         test('3D surface visible pixels',lambda:rendered_pixels('surface-initial'))
         def orbit():
             before=state();page.mouse.move(*point(.45,.6));page.mouse.down();page.mouse.move(*point(.56,.67),steps=10);page.mouse.up();frame_after(before['frames'])
+            # Render callbacks can precede pointer-up history and the diagnostic timer.
+            # Wait for committed gesture state, retaining the upload and angle assertions.
+            page.wait_for_function('s=>window.chartScene3D.canUndo && window.chartScene3D.frames>s.frames && Math.abs(window.chartScene3D.camera.yaw-s.camera.yaw)>5',arg=before)
             after=state();assert abs(after['camera']['yaw']-before['camera']['yaw'])>5
             assert after['uploadedBytes']==0,after
             assert after['canUndo'];rendered_pixels('surface-orbit')
