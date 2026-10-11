@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text.Json;
 using ChartScene.Core;
 using ChartScene.Samples;
 
@@ -74,6 +76,47 @@ public static class ExampleBrowserTests
             var index = new ExampleSearchIndex(SampleCatalog.Examples); var results = new IReadOnlyList<ChartExample>[16];
             Parallel.For(0, 16, i => results[i] = index.Search("data"));
             TestSuite.True(results.All(r => ReferenceEquals(r, results[0]))); TestSuite.Equal(index.Statistics.Executions, 1L);
+        });
+        suite.Run("search rejects oversized whitespace without changing valid cache", () =>
+        {
+            var index = new ExampleSearchIndex(SampleCatalog.Examples); var result = index.Search("data"); var before = index.Statistics;
+            foreach (char value in new[] { ' ', '\t', '\u2003', 'a' })
+                TestSuite.Throws<ArgumentOutOfRangeException>(() => index.Search(new string(value, 4097)));
+            TestSuite.Equal(index.Statistics, before);
+            TestSuite.True(ReferenceEquals(result, index.Search("data")));
+            TestSuite.True(ReferenceEquals(index.All, index.Search(new string(' ', 4096))));
+        });
+        suite.Run("search raw equality empty transitions and cache eviction stay coherent", () =>
+        {
+            var index = new ExampleSearchIndex(SampleCatalog.Examples);
+            var first = index.Search("data"); var equal = new string("data".ToCharArray());
+            TestSuite.True(ReferenceEquals(first, index.Search(equal)));
+            foreach (var empty in new string?[] { null, null, "", "", " \t", " \t", null })
+                TestSuite.True(ReferenceEquals(index.All, index.Search(empty)));
+            for (int i = 0; i < 32; i++) index.Search("absent-" + i);
+            TestSuite.True(first.SequenceEqual(index.Search("data")));
+            TestSuite.Equal(index.Statistics.CachedQueries, 16);
+            TestSuite.Throws<NotSupportedException>(() => ((IList<ChartExample>)first).Clear());
+        });
+        suite.Run("repeated search avoids normalization allocation and source scans", () =>
+        {
+            var index = new ExampleSearchIndex(SampleCatalog.Examples); const string query = "  LINE\tchart ";
+            var expected = index.Search(query);
+            for (int i = 0; i < 100; i++) index.Search(query);
+            var before = index.Statistics; long started = Stopwatch.GetTimestamp();
+            long allocated = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 10000; i++)
+                if (!ReferenceEquals(expected, index.Search(query))) throw new Exception("Repeated search did not reuse the published result.");
+            long bytes = GC.GetAllocatedBytesForCurrentThread() - allocated;
+            double milliseconds = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            var after = index.Statistics;
+            TestSuite.Equal(bytes, 0L); TestSuite.Equal(after.Executions, before.Executions);
+            TestSuite.Equal(after.ExaminedEntries, before.ExaminedEntries); TestSuite.Equal(after.CacheHits - before.CacheHits, 10000L);
+            var report = new { queries = 10000, allocatedBytes = bytes, sourceEntriesVisited = after.ExaminedEntries - before.ExaminedEntries, milliseconds,
+                scope = "Warm identical-input metadata search only. Excludes initial normalization, UI layout/rendering and GPU/presentation." };
+            Directory.CreateDirectory("artifacts/performance");
+            File.WriteAllText("artifacts/performance/example-search.json", JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine("PERF_SEARCH " + JsonSerializer.Serialize(report));
         });
     }
 }
