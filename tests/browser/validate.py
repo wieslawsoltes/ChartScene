@@ -95,7 +95,20 @@ with sync_playwright() as playwright:
         if not test('Uno application startup', lambda: wait_ready('overview')):
             raise RuntimeError('The compiled Uno application failed to start.')
         page.screenshot(path=str(out / 'overview.png'))
+        overview_extents = snapshot()['ranges']
         (out / 'initial-state.json').write_text(json.dumps(snapshot(), indent=2))
+
+        def fit_overview():
+            # Uno processes input and renders asynchronously. A fixed delay after Click
+            # can leave the previous zoom in diagnostic state. Wait for the requested
+            # fit, not merely any frame (the mouse move can also schedule a frame).
+            click('home')
+            page.wait_for_function('''expected => {
+                const s=window.chartScene;
+                return s?.ready && s.exampleId==='overview' &&
+                    ['x','y'].every(a => ['min','max'].every(k =>
+                        Math.abs(s.ranges[a][k]-expected[a][k]) < 1e-9));
+            }''', arg=overview_extents)
 
         def wheel_zoom():
             state = snapshot()
@@ -121,20 +134,29 @@ with sync_playwright() as playwright:
         test('viewport undo redo buttons', undo_redo)
 
         def pan():
-            click('home')
-            before = snapshot()['ranges']['x']
-            start, end = plot_point(.3, .7), plot_point(.45, .7)
-            page.mouse.move(*start)
-            page.mouse.down()
-            page.mouse.move(*end, steps=8)
-            page.mouse.up()
-            page.wait_for_function('old => window.chartScene.ranges.x.min < old', arg=before['min'])
-            after = snapshot()['ranges']['x']
-            assert abs((after['max']-after['min'])-(before['max']-before['min'])) < 1e-7
+            observations = []
+            for iteration in range(3):
+                # Alternate zoom -> Fit -> pan repeatedly, without increasing sleeps
+                # or replaying failed inputs. Keep the span assertion unchanged.
+                click('zoom-in')
+                fit_overview()
+                before = snapshot()['ranges']
+                start, end = plot_point(.3, .7), plot_point(.45, .7)
+                page.mouse.move(*start)
+                page.mouse.down()
+                page.mouse.move(*end, steps=8)
+                page.mouse.up()
+                page.wait_for_function('old => window.chartScene.ranges.x.min < old', arg=before['x']['min'])
+                after = snapshot()['ranges']
+                observations.append({'iteration': iteration, 'before': before, 'after': after})
+                (out / 'navigation.json').write_text(json.dumps(observations, indent=2))
+                for axis in ('x', 'y'):
+                    old, current = before[axis], after[axis]
+                    assert abs((current['max']-current['min'])-(old['max']-old['min'])) < 1e-7, observations[-1]
         test('pointer drag pan', pan)
 
         def rectangle_zoom():
-            click('home')
+            fit_overview()
             click('zoom-rectangle')
             before = snapshot()['ranges']['x']
             page.mouse.move(*plot_point(.2, .3))
@@ -146,7 +168,7 @@ with sync_playwright() as playwright:
         test('rectangle zoom mode', rectangle_zoom)
 
         def create_annotation():
-            click('home')
+            fit_overview()
             click('annotate')
             before = len(snapshot()['annotations'])
             page.mouse.move(*plot_point(.18, .22))
