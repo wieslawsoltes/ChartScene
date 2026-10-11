@@ -18,30 +18,25 @@ jobs:
           run-id: ${{ inputs.run_id }}
           github-token: ${{ github.token }}
           path: diagnostics
-      - name: Inspect immutable browser layout and input observations
+      - name: Summarize preserved browser failures
         shell: python
         run: |
           from pathlib import Path
           import json
-          root = Path('diagnostics')
-          identity = root / 'validated-commit.txt'
-          if identity.is_file(): print('VALIDATED_COMMIT', identity.read_text().strip(), flush=True)
-          for directory in sorted(root.glob('browser-tests*')):
+          directories = sorted(Path('diagnostics').glob('browser-tests*'))
+          if not directories:
+              raise SystemExit('No browser diagnostics were preserved')
+          for directory in directories:
               path = directory / 'results.json'
               if path.is_file():
                   value = json.loads(path.read_text())
-                  print('SUMMARY', directory.name, value.get('total'), value.get('failed'), flush=True)
+                  print('SUMMARY', directory.name, value.get('total'), 'tests;', value.get('failed'), 'failed', flush=True)
                   for test in value.get('tests', []):
-                      if not test.get('passed'): print('FAILED', json.dumps(test), flush=True)
-              for path in sorted(directory.glob('*state.json')):
-                  obj = json.loads(path.read_text()); chart = obj.get('chart', obj)
-                  selected = {key: chart.get(key) for key in ['ready','exampleId','theme','mode','streaming','frames','width','height','error','ranges']}
-                  selected['browser'] = obj.get('browser')
-                  controls = chart.get('controls', {})
-                  selected['controls'] = {key: controls.get(key) for key in ['theme','chart','source-view','search','navigation-panel','inspector-panel','browser-back','browser-forward','play']}
-                  print('STATE', directory.name, path.name, json.dumps(selected), flush=True)
+                      if not test.get('passed'):
+                          print('FAILED', test.get('name'), str(test.get('error'))[:3000], flush=True)
               path = directory / 'console.json'
               if path.is_file():
                   for entry in json.loads(path.read_text())[-100:]:
-                      if entry.get('type') in ('pageerror','error'):
-                          print('CONSOLE', directory.name, json.dumps(entry)[:4000], flush=True)
+                      text = str(entry.get('text', ''))
+                      if any(term in text.lower() for term in ['exception', 'failed', 'framebuffer', 'chartscene_gl', 'error:']):
+                          print('CONSOLE', directory.name, text[:3000], flush=True)
