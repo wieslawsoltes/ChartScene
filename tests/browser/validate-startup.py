@@ -31,7 +31,7 @@ async def main():
                 page = await context.new_page(); page.set_default_timeout(20_000)
                 errors = []; delayed_fonts = []
                 page.on('pageerror', lambda error: errors.append(str(error)))
-                page.on('console', lambda message: logs.append({'view':view,'type':message.type,'text':message.text}))
+                page.on('console', lambda message, view=view: logs.append({'view':view,'type':message.type,'text':message.text}))
                 if font_delay:
                     async def delay_font(route):
                         delayed_fonts.append(route.request.url)
@@ -46,6 +46,9 @@ async def main():
                         const s=window[key];if(s?.error)throw new Error(s.error);
                         return s?.ready && window.chartSceneStartup?.requests===1;
                     }''', arg=globals_by_view[view], timeout=120_000)
+                    # A colored loader progress bar must never count as a presented chart.
+                    # Observe its removal by Uno after presentation; never remove it here.
+                    await page.wait_for_function("!document.querySelector('#loading.uno-persistent-loader')")
                     if font_delay: assert delayed_fonts, 'The delayed-font fixture must intercept actual font requests.'
                     deadline = time.monotonic() + 8; consecutive = 0
                     while time.monotonic() < deadline:
@@ -64,8 +67,6 @@ async def main():
                             break
                         await asyncio.sleep(.1)
                     assert consecutive >= 2, observations
-                    # Observations never change the application. No persistent Rendering handler
-                    # is needed after the frame request; a static stacked view must settle.
                     if view == 'stacks':
                         before = await page.evaluate('window.chartSceneStacks.frames')
                         await asyncio.sleep(1)
@@ -80,7 +81,7 @@ async def main():
                     results.append({'name':name,'passed':False,'error':str(error),'trace':traceback.format_exc(),'observations':observations})
                     print('FAIL',name,error,flush=True)
                     await page.screenshot(path=str(out / f'{view}-{font_delay}-failure.png'))
-                    state = await page.evaluate('key=>({gallery:window[key],startup:window.chartSceneStartup,fatal:window.chartScene?.fatalError})', globals_by_view[view])
+                    state = await page.evaluate('key=>({gallery:window[key],startup:window.chartSceneStartup,fatal:window.chartScene?.fatalError,loader:document.querySelector("#loading")?.outerHTML})', globals_by_view[view])
                     (out / f'{view}-{font_delay}-failure.json').write_text(json.dumps(state,indent=2))
                 finally:
                     (out / 'results.json').write_text(json.dumps({'total':len(results),'failed':sum(not r['passed'] for r in results),'tests':results},indent=2))
