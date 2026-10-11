@@ -8,6 +8,7 @@ public sealed partial class App:Application
     public static Window? MainWindow { get; private set; }
     public App()
     {
+        GraphicsDiagnostics.Initialize();
         InitializeComponent();
         UnhandledException+=(_,e)=> { Console.Error.WriteLine(e.Exception); PlatformBridge.ReportFailure(e.Exception.ToString()); };
     }
