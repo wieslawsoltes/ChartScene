@@ -16,5 +16,6 @@ public static partial class AdditionalTests
         StackCacheTests.Register(suite);
         SceneCacheTests.Register(suite);
         ExampleBrowserTests.Register(suite);
+        BrowserVisualTests.Register(suite);
     }
 }
