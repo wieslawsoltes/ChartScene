@@ -43,11 +43,13 @@ public static class KeyboardNavigationScope
         if (args.Handled || args.Key != VirtualKey.Tab || Down(VirtualKey.Control) || Down(VirtualKey.Menu))
             return;
         var root = (FrameworkElement)sender;
-        if (!root.IsLoaded || root.XamlRoot is null) return;
+        if (!root.IsLoaded || root.XamlRoot?.Content is not { } searchRoot) return;
         var direction = Down(VirtualKey.Shift) ? FocusNavigationDirection.Previous : FocusNavigationDirection.Next;
-        // Explicit SearchRoot is required for island/browser hosts. This is the same public
-        // tab-order traversal used by native focus management, not target-specific focusing.
+        // Next/Previous require the public XamlRoot content, not an arbitrary descendant.
+        // The attached element owns the input scope; Uno owns traversal within that window.
+        // This also supports attaching the behavior to a nested composite without passing
+        // an invalid SearchRoot to the native focus manager.
         // https://github.com/unoplatform/uno/blob/6.7.135/doc/articles/features/focus-management.md
-        args.Handled = FocusManager.TryMoveFocus(direction, new FindNextElementOptions { SearchRoot = root });
+        args.Handled = FocusManager.TryMoveFocus(direction, new FindNextElementOptions { SearchRoot = searchRoot });
     }
 }
