@@ -24,7 +24,7 @@ public sealed class ChartSurface3D : UserControl, IDisposable
         private OpenGlChartRenderer? _renderer;
         protected override void Init(GL gl)
         {
-            try { _renderer = new(gl); owner.SetError(null); }
+            try { BrowserGlReadback.Configure(this); _renderer = new(gl); owner.SetError(null); }
             catch (Exception error) { owner.SetError(error.ToString()); }
         }
         protected override unsafe void RenderOverride(GL gl)
@@ -90,7 +90,7 @@ public sealed class ChartSurface3D : UserControl, IDisposable
         IsTabStop = true; HorizontalContentAlignment = HorizontalAlignment.Stretch; VerticalContentAlignment = VerticalAlignment.Stretch;
         _canvas = new(this) { IsHitTestVisible = false };
         var root = new Grid { Background = Brush(ChartTheme.Dark.PlotBackground) };
-        root.Children.Add(_canvas); root.Children.Add(_labels); root.Children.Add(_title); root.Children.Add(_subtitle); root.Children.Add(_tooltip); root.Children.Add(_legend); root.Children.Add(_error);
+        root.Children.Add(new ArrangedGlHost(_canvas)); root.Children.Add(_labels); root.Children.Add(_title); root.Children.Add(_subtitle); root.Children.Add(_tooltip); root.Children.Add(_legend); root.Children.Add(_error);
         Content = root;
         AutomationProperties.SetName(this, "3D chart");
         AutomationProperties.SetHelpText(this, "Drag to orbit, Control-drag to pan, mouse wheel to zoom, click data to select. Home fits the chart. Arrow keys orbit. Control-Z undoes navigation.");
