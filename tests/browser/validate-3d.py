@@ -27,7 +27,7 @@ with sync_playwright() as p:
         page.wait_for_function('''id=>{const s=window.chartScene3D;if(s?.error)throw new Error(s.error);return s?.ready&&(!id||s.exampleId===id)}''',arg=identifier,timeout=120_000)
     def click(name):
         page.wait_for_function('n=>window.chartScene3D?.controls?.[n]?.width>0',arg=name)
-        b=state()['controls'][name];input_driver.click('3d-'+name,b)
+        b=state()['controls'][name];input_driver.click('3d-'+name,b,resolve=lambda: state()['controls'][name])
     def combo(name,index):
         click(name)
         page.wait_for_function('n=>window.chartScene3D[n+"DropDownOpen"]===true',arg=name)

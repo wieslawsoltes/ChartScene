@@ -27,7 +27,7 @@ with sync_playwright() as p:
         page.wait_for_function('''() => {const s=window.chartSceneStacks;if(s?.error)throw new Error(s.error);return s?.ready;}''', timeout=120_000)
     def click(name):
         b = state()['controls'][name]; old = state()['frames']
-        input_driver.click('stacks-'+name,b)
+        input_driver.click('stacks-'+name,b,resolve=lambda: state()['controls'][name])
         page.wait_for_function('old => window.chartSceneStacks.frames>old && window.chartSceneStacks.ready', arg=old)
     def point(x=.5, y=.65):
         b = state()['plot']; return (b['x']+b['width']*x, b['y']+b['height']*y)

@@ -27,7 +27,7 @@ with sync_playwright() as playwright:
         page.wait_for_function('''() => { const s=window.chartSceneLinked; if(s?.error) throw new Error(s.error); return s?.ready; }''', timeout=120_000)
     def click(name):
         b = state()['controls'][name]
-        input_driver.click('linked-'+name,b)
+        input_driver.click('linked-'+name,b,resolve=lambda: state()['controls'][name])
     def move(view, x=.4, y=.6):
         b = state()[view]['plot']
         page.mouse.move(b['x']+b['width']*x, b['y']+b['height']*y)
