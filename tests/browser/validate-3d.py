@@ -13,7 +13,7 @@ parser.add_argument('--url', default='http://127.0.0.1:8765/ChartScene/')
 parser.add_argument('--output', default='artifacts/browser-tests-3d')
 args = parser.parse_args()
 out = Path(args.output); out.mkdir(parents=True, exist_ok=True)
-results, logs = [], []
+results, logs, presentation = [], [], []
 with sync_playwright() as p:
     browser = p.chromium.launch(args=['--enable-webgl','--ignore-gpu-blocklist','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
     context = browser.new_context(viewport={'width':1440,'height':1000}, device_scale_factor=1)
@@ -32,11 +32,24 @@ with sync_playwright() as p:
     def screenshot(name):
         path=out/(name+'.png');page.screenshot(path=str(path));return path
     def rendered_pixels(name):
-        path=screenshot(name); b=state()['controls']['chart']
-        image=Image.open(path).convert('RGB').crop((int(b['x']+20),int(b['y']+80),int(b['x']+b['width']-20),int(b['y']+b['height']-30)))
-        colors=image.resize((240,160)).getdata()
-        count=sum(max(c)-min(c)>45 and max(c)>95 for c in colors)
-        assert count>30, (name,'no colored geometry visible',count)
+        # The managed render callback precedes Uno's framebuffer readback and composition.
+        # Observe real screenshots until geometry is presented; do not force input/rendering,
+        # alter diagnostics, relax the pixel threshold, or accept a blank initial frame.
+        started=time.perf_counter(); deadline=started+8; samples=[]; consecutive=0
+        while True:
+            current=state(); assert not current.get('error'),current.get('error')
+            path=screenshot(name); b=current['controls']['chart']
+            with Image.open(path) as source:
+                image=source.convert('RGB').crop((int(b['x']+20),int(b['y']+80),int(b['x']+b['width']-20),int(b['y']+b['height']-30)))
+                colors=image.resize((240,160)).getdata()
+                count=sum(max(c)-min(c)>45 and max(c)>95 for c in colors)
+            samples.append({'milliseconds':(time.perf_counter()-started)*1000,'coloredPixels':count,'managedFrames':current.get('frames')})
+            consecutive=consecutive+1 if count>30 else 0
+            if consecutive>=2 or time.perf_counter()>=deadline: break
+            page.wait_for_timeout(100)
+        presentation.append({'name':name,'observations':samples})
+        (out/'presentation.json').write_text(json.dumps(presentation,indent=2))
+        assert consecutive>=2,(name,'colored geometry did not remain visibly presented',samples)
     def test(name,action):
         start=time.perf_counter()
         try:

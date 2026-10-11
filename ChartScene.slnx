@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ChartScene.Core/ChartScene.Core.csproj" />
+    <Project Path="src/ChartScene.Data/ChartScene.Data.csproj" />
+    <Project Path="src/ChartScene.Numerics/ChartScene.Numerics.csproj" />
+    <Project Path="src/ChartScene.Charting/ChartScene.Charting.csproj" />
+    <Project Path="src/ChartScene.Rendering/ChartScene.Rendering.csproj" />
+    <Project Path="src/ChartScene.Rendering.Skia/ChartScene.Rendering.Skia.csproj" />
+    <Project Path="src/ChartScene.Interaction/ChartScene.Interaction.csproj" />
+    <Project Path="src/ChartScene.ThreeD/ChartScene.ThreeD.csproj" />
+    <Project Path="src/ChartScene.Rendering.OpenGL/ChartScene.Rendering.OpenGL.csproj" />
+    <Project Path="src/ChartScene.Controls/ChartScene.Controls.csproj" />
+    <Project Path="src/ChartScene.Samples/ChartScene.Samples.csproj" />
+    <Project Path="src/ChartScene.Samples3D/ChartScene.Samples3D.csproj" />
+    <Project Path="src/ChartScene.App/ChartScene.App.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ChartScene.Tests/ChartScene.Tests.csproj" />
+    <Project Path="tests/ChartScene.GpuTests/ChartScene.GpuTests.csproj" />
+  </Folder>
+</Solution>
