@@ -14,6 +14,7 @@ public sealed partial class ChartRenderer
     private readonly Dictionary<(HeatmapGrid Grid,ColorMap Map,DoubleRange Range,HeatmapColorScaleMode Mode,double Opacity),RasterImage> _rasterCache=[];
     public ChartFrame Render(IChartCanvas target,ChartModel model,double width,double height,ChartViewState? view=null)
     {
+        BeginResamplingFrame();
         var timer=Stopwatch.StartNew(); var canvas=new CountingCanvas(target); _renderedPoints=0; _hits.Clear(); _legend.Clear();
         canvas.Clear(model.Theme.Background);
         var errors=model.Validate();

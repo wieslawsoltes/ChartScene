@@ -6,34 +6,10 @@ namespace ChartScene.Numerics;
 
 public static class Resampling
 {
-    /// <summary>Pixel-bucket min/max in source order, retaining endpoint samples and every NaN break.</summary>
+    /// <summary>Indexed pixel-bucket extrema preserving endpoints, source order and all NaN breaks.</summary>
     public static int[] MinMax(SeriesSnapshot data,int yChannel,DoubleRange visible,int pixels)
-    {
-        if(pixels<1) throw new ArgumentOutOfRangeException(nameof(pixels));
-        var(start,end)=data.VisibleIndices(visible);
-        if(end-start<=pixels*4||!data.IsSortedAscending) return Enumerable.Range(start,end-start).ToArray();
-        var result=new List<int>(pixels*4+8);
-        int bucket=int.MinValue,first=-1,last=-1,min=-1,max=-1;
-        void Flush()
-        {
-            if(first<0) return;
-            Span<int> candidates=stackalloc int[4] {first,min,max,last}; candidates.Sort();
-            foreach(int i in candidates) if(i>=0&&(result.Count==0||result[^1]!=i)) result.Add(i);
-            first=last=min=max=-1;
-        }
-        for(int i=start;i<end;i++)
-        {
-            double y=data[yChannel,i];
-            if(!double.IsFinite(y)) { Flush(); result.Add(i); bucket=int.MinValue; continue; }
-            int next=(int)Math.Clamp(Math.Floor(visible.Fraction(data[0,i])*pixels),-1,pixels);
-            if(next!=bucket) { Flush(); bucket=next; }
-            if(first<0) first=min=max=i;
-            last=i;
-            if(y<data[yChannel,min]) min=i;
-            if(y>data[yChannel,max]) max=i;
-        }
-        Flush(); return result.ToArray();
-    }
+        => IndexedResampling.MinMax(data,yChannel,visible,pixels);
+
     /// <summary>Largest-triangle-three-buckets, separately applied to each continuous finite run.</summary>
     public static int[] Lttb(SeriesSnapshot data,int yChannel,int threshold)
     {
