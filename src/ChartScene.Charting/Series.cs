@@ -20,6 +20,8 @@ public class RenderableSeries : ObservableObject,IDisposable
     private double _thickness=1.5,_markerSize=6,_pointWidth=.72,_baseline,_opacity=1;
     private PointMarker _marker;
     private ColorMap _colorMap=ColorMap.Thermal;
+    private DoubleRange? _colorMapRange;
+    private HeatmapColorScaleMode _colorScaleMode;
     public SeriesKind Kind { get; }
     public string Id { get; set; }=Guid.NewGuid().ToString("N");
     public string SeriesName { get=>_name; set=>Set(ref _name,value??""); }
@@ -40,7 +42,27 @@ public class RenderableSeries : ObservableObject,IDisposable
     public double Opacity { get=>_opacity; set { if(!double.IsFinite(value)||value<0||value>1) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _opacity,value); } }
     public PointMarker PointMarker { get=>_marker; set=>Set(ref _marker,value); }
     public ColorMap ColorMap { get=>_colorMap; set { ArgumentNullException.ThrowIfNull(value); Set(ref _colorMap,value); } }
-    public DoubleRange? ColorMapRange { get; set; }
+    public DoubleRange? ColorMapRange
+    {
+        get=>_colorMapRange;
+        set
+        {
+            if(value is { } range && (!range.IsValid || _colorScaleMode==HeatmapColorScaleMode.Logarithmic && range.Min<=0))
+                throw new ArgumentOutOfRangeException(nameof(value));
+            Set(ref _colorMapRange,value);
+        }
+    }
+    /// <summary>Color normalization for heatmap and contour series, independent of spatial axis scales.</summary>
+    public HeatmapColorScaleMode ColorScaleMode
+    {
+        get=>_colorScaleMode;
+        set
+        {
+            if(!Enum.IsDefined(value) || value==HeatmapColorScaleMode.Logarithmic && _colorMapRange is { Min: <=0 })
+                throw new ArgumentOutOfRangeException(nameof(value));
+            Set(ref _colorScaleMode,value);
+        }
+    }
     public StackMode StackMode { get; set; }
     public VectorColorMode VectorColorMode { get; set; }=VectorColorMode.ByMagnitude;
     public VectorLengthMode VectorLengthMode { get; set; }=VectorLengthMode.DataUnits;

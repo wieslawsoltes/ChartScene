@@ -8,17 +8,16 @@ public sealed partial class ChartRenderer
 {
     private void DrawGridSeries(IChartCanvas c,RenderableSeries series,HeatmapGrid grid,SeriesProjection projection)
     {
-        double min=double.PositiveInfinity,max=double.NegativeInfinity;
-        foreach(double value in grid.Values.Span) if(double.IsFinite(value)) { min=Math.Min(min,value); max=Math.Max(max,value); }
-        if(!double.IsFinite(min)) return;
-        var range=series.ColorMapRange??DoubleRange.FromExtents(min,max);
+        var scale=HeatmapColorScale.Capture(series);
+        if(!scale.HasValues) return;
+        var range=scale.Range;
         if(series.Kind==SeriesKind.Contour)
         {
-            double[] levels=series.ContourLevels.Count>0?series.ContourLevels.Where(double.IsFinite).ToArray():Enumerable.Range(1,10).Select(i=>range.At(i/11.0)).ToArray();
+            double[] levels=series.ContourLevels.Count>0?series.ContourLevels.Where(double.IsFinite).ToArray():Enumerable.Range(1,10).Select(i=>scale.ValueAt(i/11.0)).ToArray();
             foreach(var segment in Contours.MarchingSquares(grid,levels))
             {
                 PointD a=projection.ToScreen(segment.A.X,segment.A.Y),b=projection.ToScreen(segment.B.X,segment.B.Y);
-                if(Geometry.ClipLine(projection.Plot,ref a,ref b)) c.DrawLine(a,b,new(Alpha(series.ColorMap.Sample(range.Fraction(segment.Level)),series.Opacity),series.StrokeThickness));
+                if(Geometry.ClipLine(projection.Plot,ref a,ref b)) c.DrawLine(a,b,new(scale.ColorAt(segment.Level),series.StrokeThickness));
                 _renderedPoints+=2;
             }
             return;
@@ -26,14 +25,14 @@ public sealed partial class ChartRenderer
         bool uniform=IsUniform(grid.XEdges.Span)&&IsUniform(grid.YEdges.Span)&&projection.XAxis.Scale!=AxisScale.Logarithmic&&projection.YAxis.Scale!=AxisScale.Logarithmic;
         if(uniform)
         {
-            var key=(grid,series.ColorMap,range,series.Opacity);
+            var key=(grid,series.ColorMap,range,series.ColorScaleMode,series.Opacity);
             if(!_rasterCache.TryGetValue(key,out var image))
             {
                 if(_rasterCache.Count>=8) _rasterCache.Clear();
                 var pixels=new byte[checked(grid.Width*grid.Height*4)];
                 for(int i=0;i<grid.Values.Length;i++)
                 {
-                    var color=Alpha(series.ColorMap.Sample(range.Fraction(grid.Values.Span[i])),series.Opacity);
+                    var color=scale.ColorAt(grid.Values.Span[i]);
                     pixels[4*i]=color.R; pixels[4*i+1]=color.G; pixels[4*i+2]=color.B; pixels[4*i+3]=color.A;
                 }
                 image=new(grid.Width,grid.Height,pixels); _rasterCache[key]=image;
@@ -46,11 +45,11 @@ public sealed partial class ChartRenderer
         {
             for(int y=0;y<grid.Height;y++) for(int x=0;x<grid.Width;x++)
             {
-                double value=grid[x,y]; if(!double.IsFinite(value)) continue;
+                double value=grid[x,y]; if(!double.IsFinite(scale.Fraction(value))) continue;
                 PointD a=projection.ToScreen(grid.XEdges.Span[x],grid.YEdges.Span[y]),b=projection.ToScreen(grid.XEdges.Span[x+1],grid.YEdges.Span[y+1]);
                 if(!a.IsFinite||!b.IsFinite) continue;
                 var rectangle=RectD.FromPoints(a,b); if(!rectangle.Intersects(projection.Plot)) continue;
-                DrawBoundedRect(c,rectangle,Alpha(series.ColorMap.Sample(range.Fraction(value)),series.Opacity),null,projection.Plot);
+                DrawBoundedRect(c,rectangle,scale.ColorAt(value),null,projection.Plot);
                 _renderedPoints++;
             }
         }
