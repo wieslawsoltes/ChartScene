@@ -7,5 +7,8 @@ public static partial class AdditionalTests
         DiagnosticTests.Register(suite);
         CursorSyncTests.Register(suite);
         HeatmapLegendTests.Register(suite);
+        IndexedResamplingTests.Register(suite);
+        RangeNavigatorTests.Register(suite);
+        GridPerformanceTests.Register(suite);
     }
 }
