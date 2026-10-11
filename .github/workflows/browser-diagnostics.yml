@@ -1,0 +1,35 @@
+name: Inspect browser diagnostics
+on:
+  pull_request:
+    paths: [.github/workflows/browser-diagnostics.yml]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Application run whose preserved browser diagnostics should be inspected
+        required: true
+        default: '38116703841'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: application-validation
+          run-id: ${{ inputs.run_id || '38116703841' }}
+          github-token: ${{ github.token }}
+          path: diagnostics
+      - name: Read preserved 3D browser failures
+        shell: python
+        run: |
+          from pathlib import Path
+          import json
+          root = Path('diagnostics/browser-tests-3d')
+          if not root.is_dir():
+              raise SystemExit('No 3D browser diagnostics were preserved')
+          for file in sorted(root.rglob('*.json')):
+              print('\n====', file, '====', flush=True)
+              value = json.loads(file.read_text())
+              print(json.dumps(value, indent=2)[:50000], flush=True)
