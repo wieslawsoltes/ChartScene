@@ -27,7 +27,8 @@ public class ChartSurface:UserControl,IDisposable
         public void RequestRender()=>Invalidate();
     }
     private readonly PlotCanvas _canvas;
-    private readonly ChartRenderer _renderer=new();
+    private SkiaChartSceneCache? _sceneCache;
+    public SceneCacheStatistics SceneCacheStatistics=>_sceneCache?.Statistics??default;
     private SkiaResources? _resources;
     private ChartController? _controller;
     private int _queued;
@@ -63,7 +64,7 @@ public class ChartSurface:UserControl,IDisposable
         if(_controller is not null) { _controller.ViewChanged-=OnViewChanged; _controller.Dispose(); }
         _controller=next is null?null:new(next);
         if(_controller is not null) _controller.ViewChanged+=OnViewChanged;
-        LastFrame=null; LastError=null;
+        _sceneCache?.Invalidate(); LastFrame=null; LastError=null;
         if(IsLoaded&&next is not null) Attach();
         RequestRender();
     }
@@ -77,7 +78,7 @@ public class ChartSurface:UserControl,IDisposable
     private void OnUnloaded(object sender,RoutedEventArgs e)
     {
         if(_attached&&Model is not null) Model.Changed-=OnModelChanged;
-        _attached=false; _controller?.Cancel(); _resources?.Dispose(); _resources=null; Interlocked.Exchange(ref _queued,0);
+        _attached=false; _controller?.Cancel(); _sceneCache?.Dispose(); _sceneCache=null; _resources?.Dispose(); _resources=null; Interlocked.Exchange(ref _queued,0);
     }
     private void OnModelChanged(object? sender,EventArgs e)=>RequestRender();
     private void OnViewChanged(object? sender,EventArgs e)=>RequestRender();
@@ -90,16 +91,17 @@ public class ChartSurface:UserControl,IDisposable
     {
         Interlocked.Exchange(ref _queued,0);
         if(_disposed||Model is null||_controller is null) return;
-        _resources??=new(); _resources.BeginFrame();
+        _sceneCache??=new();
         try
         {
-            LastFrame=_renderer.Render(new SkiaChartCanvas(canvas,_resources),Model,area.Width,area.Height,_controller.View);
+            LastFrame=_sceneCache.Render(canvas,Model,area.Width,area.Height,_controller.View);
             _controller.SetFrame(LastFrame); FrameCount++; LastError=LastFrame.Diagnostics.Count==0?null:string.Join("\n",LastFrame.Diagnostics);
             RenderCompleted?.Invoke(this,LastFrame);
         }
         catch(Exception error)
         {
             LastError=error.ToString();
+            _resources??=new(); _resources.BeginFrame();
             canvas.Clear(new SKColor(23,28,40));
             var adapter=new SkiaChartCanvas(canvas,_resources); adapter.DrawText("Chart rendering failed",new(20,32),new(new(235,135,135),16)); adapter.DrawText(error.Message,new(20,56),new(new(220,228,239),12));
         }
@@ -149,7 +151,7 @@ public class ChartSurface:UserControl,IDisposable
         if(_attached&&Model is not null) Model.Changed-=OnModelChanged;
         _attached=false;
         if(_controller is not null) { _controller.ViewChanged-=OnViewChanged; _controller.Dispose(); }
-        _resources?.Dispose(); _resources=null;
+        _sceneCache?.Dispose(); _sceneCache=null; _resources?.Dispose(); _resources=null;
         base.Dispose();
     }
 }
