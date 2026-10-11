@@ -27,3 +27,18 @@ Two added browser regressions exercise Escape/resize and pointer reactivation at
 retain current model identity and require dismissal to remain stable on every
 observation; a failed observation is not retried. Diagnostic fields expose
 `navigationOpen`, `searchDismissed` and `searchFocused` read-only.
+
+## Warm allocation measurement
+
+Run `38177773692` stopped at the unchanged 3D metadata allocation fixture; the
+parallel Validate run `38177773699` passed the same 500 tests on the same source.
+The failing fixture did not preserve the allocation count before asserting.
+
+The measurement now warms its exact non-inlined, non-tiered helper and measures
+only the immutable read loop. Timing conversion and reporting happen outside
+the allocation interval. It checks **both opaque and translucent buffers** and
+retains the original **less-than-1024-byte guard per 100,000 queries**. Measured
+values are written before assertions, including failure cases. The production
+getter, data representation, JIT configuration and all rendering code are
+unchanged. Results describe warmed metadata reads, not cold calls or application
+latency; no timing threshold was added or weakened.

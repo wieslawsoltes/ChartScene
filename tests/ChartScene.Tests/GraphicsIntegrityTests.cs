@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using ChartScene.Core;
 using ChartScene.Rendering;
@@ -84,14 +85,43 @@ public static class GraphicsIntegrityTests
         suite.Run("3D transparency-query constant-work evidence", () =>
         {
             var vertices = Enumerable.Range(0, 100000).Select(i => new Vertex3D(new(i * .00001, 0, 0), Vector3D.UnitY, ColorRgba.White)).ToArray();
-            var mesh = new MeshBuffer3D(vertices, [], MeshTopology3D.Points);
-            var timer = new Stopwatch(); long before = GC.GetAllocatedBytesForCurrentThread(); timer.Start();
-            int transparent = 0; for (int i = 0; i < 100000; i++) if (mesh.HasTransparency) transparent++;
-            double milliseconds = timer.Elapsed.TotalMilliseconds; long bytes = GC.GetAllocatedBytesForCurrentThread() - before;
-            TestSuite.Equal(transparent, 0); TestSuite.True(bytes < 1024);
-            var report = new { vertices = vertices.Length, queries = 100000, milliseconds, allocatedBytes = bytes,
-                scope = "Immutable metadata reads only: HasTransparency is computed during construction, not by scanning vertices on each camera frame. Not a GPU/FPS benchmark." };
-            Directory.CreateDirectory("artifacts/performance"); File.WriteAllText("artifacts/performance/mesh-metadata.json", JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+            var opaque = new MeshBuffer3D(vertices, [], MeshTopology3D.Points);
+            vertices[^1] = vertices[^1] with { Color = ColorRgba.White.WithAlpha(80) };
+            var translucent = new MeshBuffer3D(vertices, [], MeshTopology3D.Points);
+            // Warm the exact measurement helper, both branches, and timing/counter APIs.
+            // Constructor, JIT setup, elapsed-time conversion and reporting are excluded.
+            TestSuite.Equal(MeasureMetadata(opaque, 1000).TransparentCount, 0);
+            TestSuite.Equal(MeasureMetadata(translucent, 1000).TransparentCount, 1000);
+            var opaqueReads = MeasureMetadata(opaque, 100000);
+            var translucentReads = MeasureMetadata(translucent, 100000);
+            var report = new { verticesPerBuffer = vertices.Length, queriesPerBuffer = 100000,
+                opaque = opaqueReads, translucent = translucentReads,
+                scope = "Warm immutable metadata read loops only, in a pre-JITed non-tiered measurement helper. Constructor, timing conversion and JSON are outside the allocation interval. Not application latency, GPU, FPS or a cold-start benchmark." };
+            // Preserve measured values even when an assertion fails.
+            Directory.CreateDirectory("artifacts/performance");
+            File.WriteAllText("artifacts/performance/mesh-metadata.json", JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine("PERF_MESH_METADATA " + JsonSerializer.Serialize(report));
+            TestSuite.Equal(opaqueReads.TransparentCount, 0);
+            TestSuite.Equal(translucentReads.TransparentCount, 100000);
+            if (opaqueReads.AllocatedBytes >= 1024 || translucentReads.AllocatedBytes >= 1024)
+                throw new Exception($"Metadata allocation guard (<1024 bytes per 100000 queries): opaque={opaqueReads.AllocatedBytes}, translucent={translucentReads.AllocatedBytes}.");
         });
+    }
+
+    private readonly record struct MetadataMeasurement(int TransparentCount, long AllocatedBytes, double Milliseconds);
+
+    // Fixture only: compile once before measuring warm reads rather than mixing an OSR/tier
+    // transition into the allocation interval. Production getter/JIT settings are unchanged.
+    // https://learn.microsoft.com/dotnet/api/system.runtime.compilerservices.methodimploptions
+    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.AggressiveOptimization)]
+    private static MetadataMeasurement MeasureMetadata(MeshBuffer3D mesh, int queries)
+    {
+        long start = Stopwatch.GetTimestamp();
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        int transparent = 0;
+        for (int i = 0; i < queries; i++) if (mesh.HasTransparency) transparent++;
+        long bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        double milliseconds = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+        return new(transparent, bytes, milliseconds);
     }
 }
