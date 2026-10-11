@@ -158,7 +158,7 @@ public sealed class MainPage : Page
         var navigation = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
         _back = Button("browser-back",ChartGlyph.Back,"",()=>_journal.GoBack(),"Previous example (Alt+Left)"); navigation.Children.Add(_back);
         navigation.Children.Add(Button("browser-home",ChartGlyph.Home,"",()=>ShowDocument(Document.Catalogue),"Browse chart examples"));
-        _forward = Button("browser-forward",ChartGlyph.Forward,"",()=>_journal.GoForward(),"Next example (Alt+Right)"); navigation.Children.Add(_forward); header.Children.Add(_forward); header.Children.Remove(_forward); header.Children.Add(navigation);
+        _forward = Button("browser-forward",ChartGlyph.Forward,"",()=>_journal.GoForward(),"Next example (Alt+Right)"); navigation.Children.Add(_forward); header.Children.Add(navigation);
         var brand = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, Margin = new Thickness(4,0,8,0), VerticalAlignment = VerticalAlignment.Center };
         brand.Children.Add(new ChartIcon { Glyph = ChartGlyph.Line, Width = 26, Height = 26, Tint = Windows.UI.Color.FromArgb(255,83,184,207) });
         brand.Children.Add(new TextBlock { Text = "CHARTSCENE", FontSize = 19, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
