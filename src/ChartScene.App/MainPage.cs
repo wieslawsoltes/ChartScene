@@ -79,7 +79,11 @@ public sealed class MainPage : Page
         BuildHeader(); BuildCommands(); BuildWorkspace(); BuildFooter(); Content = _root;
         Register("chart",_chart); Register("search",_search); Register("navigation",_navigation);
         _journal.Changed += (_, _) => ApplyLocation();
-        _search.TextChanged += (_, _) => { RebuildNavigation(); if (!string.IsNullOrWhiteSpace(_search.Text)) { _navigationOpen = true; ResizeWorkspace(); } };
+        _search.TextChanged += (_, _) => { RebuildNavigation(); if (!string.IsNullOrWhiteSpace(_search.Text)) RevealSearchResults(); };
+        // TextChanged is not an activation event: replacing a query with identical text
+        // raises no change. Keyboard focus and pointer activation must reopen cached rows.
+        _search.GotFocus += (_, _) => RevealSearchResults();
+        _search.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) => RevealSearchResults()), true);
         _search.KeyDown += (_, e) =>
         {
             if (e.Key == VirtualKey.Enter && _shownResults is { Count: > 0 }) { OpenExample(_shownResults[0]); e.Handled = true; }
@@ -110,9 +114,17 @@ public sealed class MainPage : Page
         Unloaded += (_, _) => { _statusTimer.Stop(); PauseStream(); };
         SizeChanged += (_, _) => ResizeWorkspace();
         _root.SizeChanged += (_, _) => DispatcherQueue.TryEnqueue(PublishSnapshot);
-        Shortcut(VirtualKey.F,VirtualKeyModifiers.Control,()=>{_search.Focus(FocusState.Keyboard);_search.SelectAll();});
+        Shortcut(VirtualKey.F,VirtualKeyModifiers.Control,()=>{RevealSearchResults();_search.Focus(FocusState.Keyboard);_search.SelectAll();});
         Shortcut(VirtualKey.Left,VirtualKeyModifiers.Menu,()=>_journal.GoBack());
         Shortcut(VirtualKey.Right,VirtualKeyModifiers.Menu,()=>_journal.GoForward());
+    }
+    private void RevealSearchResults()
+    {
+        if (!IsLoaded || _model is null) return;
+        RebuildNavigation();
+        if (_navigationOpen) return;
+        _navigationOpen = true;
+        ResizeWorkspace();
     }
     private void Shortcut(VirtualKey key, VirtualKeyModifiers modifiers, Action action)
     {
@@ -146,7 +158,7 @@ public sealed class MainPage : Page
         var navigation = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
         _back = Button("browser-back",ChartGlyph.Back,"",()=>_journal.GoBack(),"Previous example (Alt+Left)"); navigation.Children.Add(_back);
         navigation.Children.Add(Button("browser-home",ChartGlyph.Home,"",()=>ShowDocument(Document.Catalogue),"Browse chart examples"));
-        _forward = Button("browser-forward",ChartGlyph.Forward,"",()=>_journal.GoForward(),"Next example (Alt+Right)"); navigation.Children.Add(_forward); header.Children.Add(navigation);
+        _forward = Button("browser-forward",ChartGlyph.Forward,"",()=>_journal.GoForward(),"Next example (Alt+Right)"); navigation.Children.Add(_forward); header.Children.Add(_forward); header.Children.Remove(_forward); header.Children.Add(navigation);
         var brand = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, Margin = new Thickness(4,0,8,0), VerticalAlignment = VerticalAlignment.Center };
         brand.Children.Add(new ChartIcon { Glyph = ChartGlyph.Line, Width = 26, Height = 26, Tint = Windows.UI.Color.FromArgb(255,83,184,207) });
         brand.Children.Add(new TextBlock { Text = "CHARTSCENE", FontSize = 19, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
@@ -414,7 +426,8 @@ public sealed class MainPage : Page
     }
     private int ThemeFocusedIndex()
     {
-        DependencyObject? focused=FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
+        if (XamlRoot is not { } root) return -1;
+        DependencyObject? focused=FocusManager.GetFocusedElement(root) as DependencyObject;
         while(focused is not null)
         {
             if(focused is ComboBoxItem item)return _theme.IndexFromContainer(item);
