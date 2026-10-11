@@ -1,0 +1,42 @@
+name: Inspect browser diagnostics
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Application run whose preserved diagnostics should be inspected
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: application-validation
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          path: diagnostics
+      - name: Summarize preserved browser failures
+        shell: python
+        run: |
+          from pathlib import Path
+          import json
+          directories = sorted(Path('diagnostics').glob('browser-tests*'))
+          if not directories:
+              raise SystemExit('No browser diagnostics were preserved')
+          for directory in directories:
+              path = directory / 'results.json'
+              if path.is_file():
+                  value = json.loads(path.read_text())
+                  print('SUMMARY', directory.name, value.get('total'), 'tests;', value.get('failed'), 'failed', flush=True)
+                  for test in value.get('tests', []):
+                      if not test.get('passed'):
+                          print('FAILED', test.get('name'), str(test.get('error'))[:3000], flush=True)
+              path = directory / 'console.json'
+              if path.is_file():
+                  for entry in json.loads(path.read_text())[-100:]:
+                      text = str(entry.get('text', ''))
+                      if any(term in text.lower() for term in ['exception', 'failed', 'framebuffer', 'chartscene_gl', 'error:']):
+                          print('CONSOLE', directory.name, text[:3000], flush=True)

@@ -316,13 +316,13 @@ public sealed class MainPage:Page
         _controls["inspector-panel"].Visibility=width>=1150?Visibility.Visible:Visibility.Collapsed;
         PublishSnapshot();
     }
-    private object? Bounds(FrameworkElement element)
+    private ControlBounds? Bounds(FrameworkElement element)
     {
         if(!element.IsLoaded||element.Visibility!=Visibility.Visible||element.ActualWidth<=0||element.ActualHeight<=0) return null;
         try
         {
-            var position=element.TransformToVisual(_root).TransformPoint(new Point(0,0));
-            return new{x=position.X,y=position.Y,width=element.ActualWidth,height=element.ActualHeight};
+            var position=element.TransformToVisual(null).TransformPoint(new Point(0,0));
+            return new(position.X,position.Y,element.ActualWidth,element.ActualHeight);
         }
         catch(InvalidOperationException) { return null; }
     }
@@ -330,19 +330,19 @@ public sealed class MainPage:Page
     {
         if(!IsLoaded||_model is null) return;
         var frame=_chart.LastFrame;
-        PlatformBridge.Publish(new
+        PlatformBridge.Publish(new DiagnosticSnapshot
         {
             ready=frame is not null&&_chart.LastError is null,exampleId=_example.Id,theme=_model.Theme.Name,mode=_chart.Controller.Mode.ToString(),streaming=_streaming,
             frames=_chart.FrameCount,error=_chart.LastError,renderer=_chart.RendererDescription,
             width=ActualWidth,height=ActualHeight,
             plot=frame?.Layout.PlotArea,
-            ranges=new{x=new{min=_model.XAxis.VisibleRange.Min,max=_model.XAxis.VisibleRange.Max},y=new{min=_model.YAxis.VisibleRange.Min,max=_model.YAxis.VisibleRange.Max}},
+            ranges=new(new(_model.XAxis.VisibleRange.Min,_model.XAxis.VisibleRange.Max),new(_model.YAxis.VisibleRange.Min,_model.YAxis.VisibleRange.Max)),
             statistics=frame?.Statistics,
-            series=_model.RenderableSeries.Select(s=>new{s.Id,name=s.SeriesName,kind=s.Kind.ToString(),visible=s.IsVisible,selected=s.SelectedIndices.Count,count=s.DataSeries?.Count??s.HeatmapGrid?.Values.Length??0,revision=s.DataSeries?.Revision??0}),
-            annotations=_model.Annotations.Select(a=>new{a.Id,kind=a.Kind.ToString(),a.X1,a.Y1,a.X2,a.Y2,a.IsSelected}),
+            series=_model.RenderableSeries.Select(s=>new SeriesSnapshotDto(s.Id,s.SeriesName,s.Kind.ToString(),s.IsVisible,s.SelectedIndices.Count,s.DataSeries?.Count??s.HeatmapGrid?.Values.Length??0,s.DataSeries?.Revision??0)).ToArray(),
+            annotations=_model.Annotations.Select(a=>new AnnotationSnapshotDto(a.Id,a.Kind.ToString(),a.X1,a.Y1,a.X2,a.Y2,a.IsSelected)).ToArray(),
             hits=_chart.Controller.View.Hits.Count,canUndo=_chart.Controller.History.CanUndo,canRedo=_chart.Controller.History.CanRedo,
             controls=_controls.ToDictionary(p=>p.Key,p=>Bounds(p.Value)),
-            catalog=SampleCatalog.Examples.Select(e=>new{e.Id,e.Title,e.Category})
+            catalog=SampleCatalog.Examples.Select(e=>new CatalogEntryDto(e.Id,e.Title,e.Category)).ToArray()
         });
     }
 }

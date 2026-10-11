@@ -98,13 +98,16 @@ with sync_playwright() as playwright:
         (out / 'initial-state.json').write_text(json.dumps(snapshot(), indent=2))
 
         def wheel_zoom():
-            before = snapshot()['ranges']['x']
-            page.mouse.move(*plot_point(.35, .6))
+            state = snapshot()
+            before = state['ranges']['x']
+            screen_x, screen_y = map(int, plot_point(.35, .6))
+            anchor = (screen_x-state['controls']['chart']['x']-state['plot']['X'])/state['plot']['Width']
+            page.mouse.move(screen_x, screen_y)
             page.mouse.wheel(0, -240)
             page.wait_for_function('old => window.chartScene.ranges.x.max-window.chartScene.ranges.x.min < old', arg=before['max']-before['min'])
             after = snapshot()['ranges']['x']
-            expected = before['min'] + .35 * (before['max']-before['min'])
-            actual = after['min'] + .35 * (after['max']-after['min'])
+            expected = before['min'] + anchor * (before['max']-before['min'])
+            actual = after['min'] + anchor * (after['max']-after['min'])
             assert abs(actual-expected) < 1e-5 * max(1, abs(expected)), (actual, expected)
             assert snapshot()['canUndo']
         test('wheel zoom anchor', wheel_zoom)

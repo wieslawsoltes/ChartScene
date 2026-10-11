@@ -2,20 +2,20 @@ using System.Text.Json;
 
 namespace ChartScene.App;
 
-/// <summary>Small platform boundary: diagnostics describe the actual Uno view; all chart logic remains managed.</summary>
+/// <summary>Small platform boundary. Diagnostic contracts use generated JSON metadata.</summary>
 internal static class PlatformBridge
 {
-    public static void Publish(object snapshot)
+    public static void Publish(DiagnosticSnapshot snapshot)
     {
 #if __WASM__
-        string json=JsonSerializer.Serialize(snapshot);
+        string json=JsonSerializer.Serialize(snapshot,DiagnosticJsonContext.Default.DiagnosticSnapshot);
         Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.chartScene = Object.assign(window.chartScene || {}, "+json+");");
 #endif
     }
     public static void ReportFailure(string error)
     {
 #if __WASM__
-        Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.chartScene = Object.assign(window.chartScene || {}, {fatalError:"+JsonSerializer.Serialize(error)+"});");
+        Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.chartScene = Object.assign(window.chartScene || {}, {fatalError:"+JsonSerializer.Serialize(error,DiagnosticJsonContext.Default.String)+"});");
 #endif
     }
     public static string InitialExample()
@@ -30,7 +30,7 @@ internal static class PlatformBridge
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filename);
 #if __WASM__
-        string name=JsonSerializer.Serialize(filename),mime=JsonSerializer.Serialize(mimeType),base64=JsonSerializer.Serialize(Convert.ToBase64String(contents));
+        string name=JsonSerializer.Serialize(filename,DiagnosticJsonContext.Default.String),mime=JsonSerializer.Serialize(mimeType,DiagnosticJsonContext.Default.String),base64=JsonSerializer.Serialize(Convert.ToBase64String(contents),DiagnosticJsonContext.Default.String);
         Uno.Foundation.WebAssemblyRuntime.InvokeJS("(()=>{const bytes=Uint8Array.from(atob("+base64+"),c=>c.charCodeAt(0));const url=URL.createObjectURL(new Blob([bytes],{type:"+mime+"}));const a=document.createElement('a');a.href=url;a.download="+name+";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);return '';})()");
         await Task.CompletedTask;
         return "Downloaded "+filename;
