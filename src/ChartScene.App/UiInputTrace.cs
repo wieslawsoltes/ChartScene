@@ -3,6 +3,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Media;
 
 namespace ChartScene.App;
 
@@ -26,9 +28,26 @@ internal static class UiInputTrace
         element.AddHandler(UIElement.PointerMovedEvent,new PointerEventHandler((_,e)=>Publish(registration.Id,"move",e)),true);
         element.AddHandler(UIElement.PointerPressedEvent,new PointerEventHandler((_,e)=>Publish(registration.Id,"down",e)),true);
         element.AddHandler(UIElement.PointerReleasedEvent,new PointerEventHandler((_,e)=>Publish(registration.Id,"up",e)),true);
+        // Read current focus after routed notifications finish. No focus redirection, keys,
+        // typed text, clipboard content or application-state mutation is recorded.
+        element.GotFocus+=(_,_)=>element.DispatcherQueue.TryEnqueue(()=>PublishFocus(element));
+        element.LostFocus+=(_,_)=>element.DispatcherQueue.TryEnqueue(()=>PublishFocus(element));
 #endif
     }
 #if __WASM__
+    private static void PublishFocus(FrameworkElement element)
+    {
+        if(element.XamlRoot is not { } root)return;
+        string? id=null;
+        for(DependencyObject? current=FocusManager.GetFocusedElement(root) as DependencyObject;
+            current is not null;current=VisualTreeHelper.GetParent(current))
+        {
+            string candidate=AutomationProperties.GetAutomationId(current);
+            if(!string.IsNullOrEmpty(candidate)){id=candidate;break;}
+        }
+        string json=JsonSerializer.Serialize(new UiFocusTrace(id),UiInputJsonContext.Default.UiFocusTrace);
+        Uno.Foundation.WebAssemblyRuntime.InvokeJS("(()=>{const e="+json+";e.sequence=(window.chartSceneFocus?.sequence||0)+1;window.chartSceneFocus=e;const q=window.chartSceneFocusEvents ||= [];q.push(e);if(q.length>64)q.shift();return '';})()");
+    }
     private static void Publish(string id,string kind,PointerRoutedEventArgs e)
     {
         var point=e.GetCurrentPoint(null).Position;var trace=new UiPointerTrace(id,kind,point.X,point.Y);
@@ -38,5 +57,7 @@ internal static class UiInputTrace
 #endif
 }
 public sealed record UiPointerTrace(string target,string kind,double x,double y);
+public sealed record UiFocusTrace(string? control);
 [JsonSerializable(typeof(UiPointerTrace))]
+[JsonSerializable(typeof(UiFocusTrace))]
 public partial class UiInputJsonContext:JsonSerializerContext;

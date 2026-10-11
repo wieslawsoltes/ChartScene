@@ -70,6 +70,7 @@ with sync_playwright() as playwright:
         finally:
             (out/'results.json').write_text(json.dumps({'total':len(results),'failed':sum(not r['passed'] for r in results),'tests':results},indent=2))
             (out/'console.json').write_text(json.dumps(logs,indent=2))
+            (out/'managed-focus.json').write_text(json.dumps(page.evaluate('window.chartSceneFocusEvents || []'),indent=2))
     try:
         page.goto(args.url+'?inputTrace=1',wait_until='domcontentloaded')
         test('examples workbench startup',lambda:ready('overview'))
@@ -175,12 +176,24 @@ with sync_playwright() as playwright:
             (out/'escape-resize-observations.json').write_text(json.dumps(observations,indent=2))
         test('Escape dismissal survives resize and explicit pointer reactivation',durable_dismissal)
         def keyboard_search_focus():
-            loads=chrome()['modelLoads']
-            click('navigation-toggle')
-            page.wait_for_function('window.chartSceneBrowser.navigationOpen===true')
-            click('navigation-toggle')
-            page.wait_for_function('window.chartSceneBrowser.navigationOpen===false')
-            page.keyboard.press('Shift+Tab')
+            loads=chrome()['modelLoads']; path=[]
+            focus=lambda:page.evaluate('window.chartSceneFocus || {}')
+            # Establish focus through real pointer input. The prior one-key fixture did
+            # not establish its initial focus or observe the native traversal order.
+            page.mouse.click(*point())
+            page.wait_for_function("window.chartSceneFocus?.control==='chart'")
+            visited={'chart'}
+            for step in range(32):
+                before=focus()
+                page.keyboard.press('Shift+Tab')
+                page.wait_for_function("p=>window.chartSceneFocus?.sequence>p.sequence && window.chartSceneFocus.control!==p.control",arg=before)
+                observed={'focus':focus(),'browser':chrome()};path.append(observed)
+                (out/'keyboard-focus-path.json').write_text(json.dumps(path,indent=2))
+                identity=observed['focus'].get('control')
+                if identity=='search': break
+                assert identity and identity not in visited,('Focus trapped or left registered controls',path)
+                visited.add(identity)
+            else: raise AssertionError(('Search is not reachable by keyboard traversal',path))
             page.wait_for_function('window.chartSceneBrowser.searchFocused && window.chartSceneBrowser.navigationOpen && !window.chartSceneBrowser.searchDismissed')
             page.keyboard.insert_text('FifoCapacity')
             page.wait_for_function('window.chartSceneBrowser.resultCount===1')

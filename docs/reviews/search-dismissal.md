@@ -42,3 +42,31 @@ values are written before assertions, including failure cases. The production
 getter, data representation, JIT configuration and all rendering code are
 unchanged. Results describe warmed metadata reads, not cold calls or application
 latency; no timing threshold was added or weakened.
+
+## Native keyboard path and early evidence
+
+Run `38178154141` at `dc7a5946` passed **180/181 browser checks**. All 24 startup
+cases, all stacked/theme checks, the original compact-layout test and the new
+three-width Escape/reactivation regression passed. The only failure was the new
+keyboard fixture: it assumed one Shift+Tab from the menu would land in search,
+but did not establish or record its actual initial focus. The saved state showed
+search was not focused; it did not demonstrate that focused search failed to open.
+
+The keyboard fixture now establishes chart focus through a real pointer click,
+then traverses with real Shift+Tab keys while recording the current managed focus
+identity after each key. It rejects unchanged focus, cycles, missing focus, and
+a bounded path that never reaches search. Once search is reached, the original
+reopening, typing, Escape and unchanged-model assertions still apply. This is
+native traversal, not direct focus assignment from test code or replaying failed
+clicks. The production search behavior is unchanged by this fixture correction.
+
+Opt-in `inputTrace=1` diagnostics record only automation identities of the focused
+control, not keys, text or clipboard content. Registration remains weak and
+idempotent, with at most 64 retained focus observations. No handlers are added in
+normal sessions where input tracing is disabled.
+
+CI runs the workbench fixture first and preserves its artifact immediately, so
+focused failures can be examined while the independent galleries continue.
+The temporary step-level continue-on-error does **not** permit deployment:
+the later mandatory browser gate explicitly fails unless the workbench step
+succeeded. All original suites still execute once, with unchanged assertions.

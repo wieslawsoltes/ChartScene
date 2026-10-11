@@ -38,6 +38,24 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install playwright==1.56.0 pillow
       - run: python -m playwright install --with-deps chromium
+      - name: Validate workbench focus and navigation
+        id: workbench
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/server/ChartScene
+          cp -a artifacts/site/. artifacts/server/ChartScene/
+          python -m http.server 8765 --bind 127.0.0.1 --directory artifacts/server > artifacts/logs/workbench-server.log 2>&1 &
+          server=$!
+          trap 'kill "$server"' EXIT
+          python tests/browser/validate-browser-ui.py --url http://127.0.0.1:8765/ChartScene/
+      - name: Preserve workbench evidence before the remaining suites
+        if: ${{ !cancelled() && steps.stage.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-validation
+          path: artifacts/browser-tests-ui/
+          if-no-files-found: error
       - name: Validate compiled browser at repository base path
         run: |
           set -euo pipefail
@@ -48,9 +66,12 @@ jobs:
           trap 'kill "$server"' EXIT
           failed=0
           python tests/browser/validate.py --url http://127.0.0.1:8765/ChartScene/ --catalog || failed=1
-          for suite in linked 3d colors overview stacks browser-ui startup; do
+          for suite in linked 3d colors overview stacks startup; do
             python "tests/browser/validate-$suite.py" --url http://127.0.0.1:8765/ChartScene/ || failed=1
           done
+          # continue-on-error above only allows all suites/evidence to run.
+          # A workbench failure must still fail this mandatory aggregate gate.
+          if [ "${{ steps.workbench.outcome }}" != "success" ]; then failed=1; fi
           exit "$failed"
       - name: Package reusable libraries
         id: packages
