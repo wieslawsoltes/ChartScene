@@ -1,13 +1,10 @@
 name: Inspect browser diagnostics
 on:
-  pull_request:
-    paths: [.github/workflows/browser-diagnostics.yml]
   workflow_dispatch:
     inputs:
       run_id:
         description: Application run whose preserved diagnostics should be inspected
         required: true
-        default: '38166993425'
 permissions:
   contents: read
   actions: read
@@ -18,7 +15,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: application-validation
-          run-id: ${{ inputs.run_id || '38166993425' }}
+          run-id: ${{ inputs.run_id }}
           github-token: ${{ github.token }}
           path: diagnostics
       - name: Inspect immutable browser layout and input observations
@@ -27,26 +24,24 @@ jobs:
           from pathlib import Path
           import json
           root = Path('diagnostics')
-          for name in ['browser-tests', 'browser-tests-ui']:
-              directory = root / name
-              for filename in ['initial-state.json', 'final-state.json', 'failure-state.json']:
-                  path = directory / filename
-                  if not path.is_file(): continue
-                  obj = json.loads(path.read_text())
-                  chart = obj.get('chart', obj)
-                  selected = {key: chart.get(key) for key in ['ready','exampleId','theme','mode','streaming','frames','width','height','error','ranges']}
-                  selected['browser'] = obj.get('browser')
-                  controls = chart.get('controls', {})
-                  selected['controls'] = {key: controls.get(key) for key in ['theme','chart','source-view','search','navigation-panel','inspector-panel','browser-back','browser-forward','play','example:overview','example:live','example:financial']}
-                  print('STATE', name, filename, json.dumps(selected), flush=True)
-              for filename in ['managed-input.json', 'input-actions.json']:
-                  path = directory / filename
-                  if path.is_file():
-                      value = json.loads(path.read_text())
-                      print('INPUT', name, filename, json.dumps(value[-24:] if isinstance(value,list) else value)[:18000], flush=True)
+          identity = root / 'validated-commit.txt'
+          if identity.is_file(): print('VALIDATED_COMMIT', identity.read_text().strip(), flush=True)
+          for directory in sorted(root.glob('browser-tests*')):
               path = directory / 'results.json'
               if path.is_file():
                   value = json.loads(path.read_text())
-                  print('SUMMARY', name, value.get('total'), value.get('failed'), flush=True)
+                  print('SUMMARY', directory.name, value.get('total'), value.get('failed'), flush=True)
                   for test in value.get('tests', []):
                       if not test.get('passed'): print('FAILED', json.dumps(test), flush=True)
+              for path in sorted(directory.glob('*state.json')):
+                  obj = json.loads(path.read_text()); chart = obj.get('chart', obj)
+                  selected = {key: chart.get(key) for key in ['ready','exampleId','theme','mode','streaming','frames','width','height','error','ranges']}
+                  selected['browser'] = obj.get('browser')
+                  controls = chart.get('controls', {})
+                  selected['controls'] = {key: controls.get(key) for key in ['theme','chart','source-view','search','navigation-panel','inspector-panel','browser-back','browser-forward','play']}
+                  print('STATE', directory.name, path.name, json.dumps(selected), flush=True)
+              path = directory / 'console.json'
+              if path.is_file():
+                  for entry in json.loads(path.read_text())[-100:]:
+                      if entry.get('type') in ('pageerror','error'):
+                          print('CONSOLE', directory.name, json.dumps(entry)[:4000], flush=True)

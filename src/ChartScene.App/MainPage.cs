@@ -28,7 +28,7 @@ public sealed class MainPage : Page
     private readonly Grid _root = new(), _workspace = new(), _center = new(), _tiles = new();
     private readonly ColumnDefinition _navigationColumn = new() { Width = new GridLength(0) };
     private readonly ColumnDefinition _inspectorColumn = new() { Width = new GridLength(285) };
-    private readonly ListView _navigation = new() { SelectionMode = ListViewSelectionMode.Single, Padding = new Thickness(5), BorderThickness = new Thickness(0) };
+    private readonly ListView _navigation = new() { SelectionMode = ListViewSelectionMode.None, IsItemClickEnabled = true, Padding = new Thickness(5), BorderThickness = new Thickness(0) };
     private readonly TextBox _search = new() { PlaceholderText = "Search examples, source code and more…", MaxLength = 4096, FontSize = 12, MinWidth = 130, MaxWidth = 480, Height = 32, VerticalAlignment = VerticalAlignment.Center };
     private readonly ChartSurface _chart = new() { MinHeight = 100 };
     private readonly TextBlock _status = new() { FontSize = 10, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -38,7 +38,7 @@ public sealed class MainPage : Page
     private readonly TextBox _source = new() { IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap, FontFamily = new FontFamily("Consolas"), FontSize = 12, BorderThickness = new Thickness(0), Padding = new Thickness(16) };
     private readonly TextBlock _dataSummary = new() { FontSize = 11, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _resultCount = new() { FontSize = 10, Margin = new Thickness(12,10,12,8) };
-    private readonly ComboBox _theme = new() { MinWidth = 120, FontSize = 11, Height = 28, MinHeight = 28 };
+    private readonly ComboBox _theme = new() { Width = 120, FontSize = 11, Height = 28, MinHeight = 28, HorizontalAlignment = HorizontalAlignment.Right };
     private readonly ComboBox _annotationKind = new() { HorizontalAlignment = HorizontalAlignment.Stretch, FontSize = 12 };
     private readonly TextBox _xMin = new() { PlaceholderText = "Minimum", FontSize = 11 }, _xMax = new() { PlaceholderText = "Maximum", FontSize = 11 };
     private readonly TextBox _yMin = new() { PlaceholderText = "Minimum", FontSize = 11 }, _yMax = new() { PlaceholderText = "Maximum", FontSize = 11 };
@@ -64,9 +64,9 @@ public sealed class MainPage : Page
     private ChartModel? _model;
     private bool _changing, _streaming, _navigationOpen, _inspectorOpen = true, _inspectorPinned, _sourceLoaded;
     private int _tileColumns, _navigationBuilds;
-    private long _modelLoads;
+    private long _modelLoads, _actionSequence;
     private double _nextTime = 10;
-    private string _message = "Ready";
+    private string _message = "Ready", _lastAction = "";
     private DateTime _messageUntil;
     public MainPage()
     {
@@ -85,8 +85,16 @@ public sealed class MainPage : Page
             if (e.Key == VirtualKey.Enter && _shownResults is { Count: > 0 }) { OpenExample(_shownResults[0]); e.Handled = true; }
             else if (e.Key == VirtualKey.Escape) { _search.Text = ""; _navigationOpen = false; ResizeWorkspace(); _chart.Focus(FocusState.Keyboard); e.Handled = true; }
         };
-        _navigation.SelectionChanged += (_, _) => { if (!_changing && _navigation.SelectedItem is ListViewItem { Tag: ChartExample example }) OpenExample(example); };
+        // Navigation is an activation action, not a change of selection. Reusing a row or
+        // clicking the same search result again must still navigate/dismiss the result pane.
+        _navigation.ItemClick += (_, e) =>
+        {
+            if (_changing) return;
+            var example = e.ClickedItem is ListViewItem { Tag: ChartExample item } ? item : e.ClickedItem as ChartExample;
+            if (example is not null) OpenExample(example);
+        };
         _theme.SelectionChanged += (_, _) => { if (!_changing) ApplyTheme(); };
+        _theme.DropDownOpened += (_, _) => PublishSnapshot(); _theme.DropDownClosed += (_, _) => PublishSnapshot();
         _annotationKind.SelectionChanged += (_, _) => { if (_model is not null && _annotationKind.SelectedItem is AnnotationKind kind) _chart.Controller.AnnotationKind = kind; };
         _legendToggle.Checked += (_, _) => SetLegend(true); _legendToggle.Unchecked += (_, _) => SetLegend(false);
         _cursorToggle.Checked += (_, _) => SetCursor(true); _cursorToggle.Unchecked += (_, _) => SetCursor(false);
@@ -96,12 +104,12 @@ public sealed class MainPage : Page
         Loaded += (_, _) =>
         {
             _statusTimer.Start();
-            // Reattaching a view must not throw away data, history or a user's current viewport.
             if (_model is null) { RebuildNavigation(); _journal.Navigate(new(SampleCatalog.Find(PlatformBridge.InitialExample()).Id,Document.Example)); }
             ResizeWorkspace(); PublishSnapshot();
         };
         Unloaded += (_, _) => { _statusTimer.Stop(); PauseStream(); };
         SizeChanged += (_, _) => ResizeWorkspace();
+        _root.SizeChanged += (_, _) => DispatcherQueue.TryEnqueue(PublishSnapshot);
         Shortcut(VirtualKey.F,VirtualKeyModifiers.Control,()=>{_search.Focus(FocusState.Keyboard);_search.SelectAll();});
         Shortcut(VirtualKey.Left,VirtualKeyModifiers.Menu,()=>_journal.GoBack());
         Shortcut(VirtualKey.Right,VirtualKeyModifiers.Menu,()=>_journal.GoForward());
@@ -114,7 +122,12 @@ public sealed class MainPage : Page
     private ChartToolButton Button(string id,ChartGlyph glyph,string label,Action action,string help)
     {
         var button = new ChartToolButton(glyph,label); button.Describe(help);
-        button.Click += (_, _) => { try { action(); } catch (Exception error) { ShowMessage(error.Message); Console.Error.WriteLine(error); } };
+        button.Click += (_, _) =>
+        {
+            _lastAction=id;_actionSequence++;
+            try { action(); } catch (Exception error) { ShowMessage(error.Message); Console.Error.WriteLine(error); }
+            PublishSnapshot();
+        };
         _buttons.Add(button); Register(id,button); return button;
     }
     private void Register(string id,FrameworkElement element)
@@ -202,6 +215,7 @@ public sealed class MainPage : Page
         var heading=new StackPanel{Orientation=Orientation.Horizontal,Spacing=12,Padding=new Thickness(12)};
         heading.Children.Add(new TextBlock{Text="SampleCatalog.cs  ·  shared factory source",FontSize=12,VerticalAlignment=VerticalAlignment.Center});
         heading.Children.Add(Button("download-source",ChartGlyph.Download,"C#",async()=>await DownloadSourceAsync(),"Download the exact C# sample factory"));_sourcePane.Children.Add(heading);
+        ScrollViewer.SetVerticalScrollBarVisibility(_source,ScrollBarVisibility.Auto);ScrollViewer.SetHorizontalScrollBarVisibility(_source,ScrollBarVisibility.Auto);
         Grid.SetRow(_source,1);_sourcePane.Children.Add(_source);Register("source-view",_source);_center.Children.Add(_sourcePane);
     }
     private void BuildCatalogue()
@@ -221,7 +235,7 @@ public sealed class MainPage : Page
     }
     private void BuildFooter()
     {
-        var row=new Grid{Padding=new Thickness(10,0,8,0),ColumnSpacing=10};row.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});row.ColumnDefinitions.Add(new(){Width=GridLength.Auto});row.Children.Add(_status);
+        var row=new Grid{Padding=new Thickness(10,0,8,0),ColumnSpacing=10};row.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});row.ColumnDefinitions.Add(new(){Width=new GridLength(120)});row.Children.Add(_status);
         foreach(string theme in new[]{"Dark","Light","High contrast"})_theme.Items.Add(theme);_theme.SelectedIndex=0;Register("theme",_theme);Grid.SetColumn(_theme,1);row.Children.Add(_theme);Root(Panel(row,new Thickness(0,1,0,0)),3);
     }
     private void RebuildNavigation()
@@ -250,9 +264,8 @@ public sealed class MainPage : Page
     }
     private void OpenExample(ChartExample example)
     {
-        _navigationOpen=false;_journal.Navigate(new(example.Id,Document.Example));
-        // Same-location selection still dismisses search results, without allocating a new chart.
-        ResizeWorkspace();
+        _lastAction="example:"+example.Id;_actionSequence++;
+        _navigationOpen=false;_journal.Navigate(new(example.Id,Document.Example));ResizeWorkspace();
     }
     private void ShowDocument(Document document)
     { if(_model is not null)_journal.Navigate(new(_example.Id,document)); }
@@ -288,8 +301,7 @@ public sealed class MainPage : Page
     private void SetMode(ChartInteractionMode mode)
     {
         if(_model is null)return;_chart.Controller.Mode=mode;
-        foreach(var pair in _modeButtons)pair.Value.IsActive=pair.Key==mode;
-        PublishSnapshot();
+        foreach(var pair in _modeButtons)pair.Value.IsActive=pair.Key==mode;PublishSnapshot();
     }
     private void ApplyTheme()
     {
@@ -400,6 +412,16 @@ public sealed class MainPage : Page
             if(current is UIElement ui&&ui.Visibility!=Visibility.Visible)return null;
         var p=element.TransformToVisual(null).TransformPoint(new Point(0,0));return new(p.X,p.Y,element.ActualWidth,element.ActualHeight);
     }
+    private int ThemeFocusedIndex()
+    {
+        DependencyObject? focused=FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
+        while(focused is not null)
+        {
+            if(focused is ComboBoxItem item)return _theme.IndexFromContainer(item);
+            focused=VisualTreeHelper.GetParent(focused);
+        }
+        return -1;
+    }
     private void PublishSnapshot()
     {
         if(!IsLoaded||_model is null)return;
@@ -414,11 +436,11 @@ public sealed class MainPage : Page
             controls=_controls.ToDictionary(p=>p.Key,p=>Bounds(p.Value)),catalog=_catalogDtos
         });
 #if __WASM__
-        var state=new BrowserSnapshot(_journal.HasCurrent?_journal.Current.Document.ToString():"Example",_journal.CanGoBack,_journal.CanGoForward,_modelLoads,_navigationBuilds,_searchIndex.Statistics.Executions,_shownResults?.Count??0,_sourceLoaded);
+        var state=new BrowserSnapshot(_journal.HasCurrent?_journal.Current.Document.ToString():"Example",_journal.CanGoBack,_journal.CanGoForward,_modelLoads,_navigationBuilds,_searchIndex.Statistics.Executions,_shownResults?.Count??0,_sourceLoaded,_theme.IsDropDownOpen,ThemeFocusedIndex(),_actionSequence,_lastAction);
         Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.chartSceneBrowser="+JsonSerializer.Serialize(state,BrowserJsonContext.Default.BrowserSnapshot));
 #endif
     }
 }
-public sealed record BrowserSnapshot(string document,bool canBack,bool canForward,long modelLoads,int navigationBuilds,long searchExecutions,int resultCount,bool sourceLoaded);
+public sealed record BrowserSnapshot(string document,bool canBack,bool canForward,long modelLoads,int navigationBuilds,long searchExecutions,int resultCount,bool sourceLoaded,bool themeDropDownOpen,int themeFocusedIndex,long actionSequence,string lastAction);
 [JsonSerializable(typeof(BrowserSnapshot))]
 public partial class BrowserJsonContext:JsonSerializerContext;
