@@ -62,7 +62,7 @@ public sealed class MainPage : Page
     private IReadOnlyList<ChartExample>? _shownResults;
     private ChartExample _example = SampleCatalog.Find("overview");
     private ChartModel? _model;
-    private bool _changing, _streaming, _navigationOpen, _inspectorOpen = true, _inspectorPinned, _sourceLoaded;
+    private bool _changing, _streaming, _navigationOpen, _inspectorOpen = true, _inspectorPinned, _sourceLoaded, _searchDismissed;
     private int _tileColumns, _navigationBuilds;
     private long _modelLoads, _actionSequence;
     private double _nextTime = 10;
@@ -79,15 +79,32 @@ public sealed class MainPage : Page
         BuildHeader(); BuildCommands(); BuildWorkspace(); BuildFooter(); Content = _root;
         Register("chart",_chart); Register("search",_search); Register("navigation",_navigation);
         _journal.Changed += (_, _) => ApplyLocation();
-        _search.TextChanged += (_, _) => { RebuildNavigation(); if (!string.IsNullOrWhiteSpace(_search.Text)) RevealSearchResults(); };
-        // TextChanged is not an activation event: replacing a query with identical text
-        // raises no change. Keyboard focus and pointer activation must reopen cached rows.
-        _search.GotFocus += (_, _) => RevealSearchResults();
-        _search.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) => RevealSearchResults()), true);
+        _search.TextChanged += (_, _) =>
+        {
+            RebuildNavigation();
+            if (IsSearchFocused() && !string.IsNullOrWhiteSpace(_search.Text)) ActivateSearchResults();
+        };
+        // GotFocus can be delivered after an Escape/collapse or native focus restoration.
+        // Such a notification is not a fresh user activation. Preserve dismissal until a
+        // pointer press, shortcut, typed query, or actual keyboard focus traversal.
+        _search.GettingFocus += (_, e) =>
+        {
+            if (e.InputDevice == FocusInputDeviceKind.Keyboard &&
+                e.Direction is FocusNavigationDirection.Next or FocusNavigationDirection.Previous)
+                _searchDismissed = false;
+        };
+        _search.GotFocus += (_, _) => { if (!_searchDismissed && IsSearchFocused()) RevealSearchResults(); };
+        _search.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, _) => ActivateSearchResults()), true);
         _search.KeyDown += (_, e) =>
         {
             if (e.Key == VirtualKey.Enter && _shownResults is { Count: > 0 }) { OpenExample(_shownResults[0]); e.Handled = true; }
-            else if (e.Key == VirtualKey.Escape) { _search.Text = ""; _navigationOpen = false; ResizeWorkspace(); _chart.Focus(FocusState.Keyboard); e.Handled = true; }
+            else if (e.Key == VirtualKey.Escape)
+            {
+                _searchDismissed = true; // Set before text/focus/layout can raise callbacks.
+                _search.Text = ""; _navigationOpen = false; ResizeWorkspace();
+                _chart.Focus(FocusState.Keyboard); e.Handled = true;
+            }
+            else if (e.Key == VirtualKey.Down && !_navigationOpen) { ActivateSearchResults(); e.Handled = true; }
         };
         // Navigation is an activation action, not a change of selection. Reusing a row or
         // clicking the same search result again must still navigate/dismiss the result pane.
@@ -114,9 +131,22 @@ public sealed class MainPage : Page
         Unloaded += (_, _) => { _statusTimer.Stop(); PauseStream(); };
         SizeChanged += (_, _) => ResizeWorkspace();
         _root.SizeChanged += (_, _) => DispatcherQueue.TryEnqueue(PublishSnapshot);
-        Shortcut(VirtualKey.F,VirtualKeyModifiers.Control,()=>{RevealSearchResults();_search.Focus(FocusState.Keyboard);_search.SelectAll();});
+        Shortcut(VirtualKey.F,VirtualKeyModifiers.Control,()=>{ActivateSearchResults();_search.Focus(FocusState.Keyboard);_search.SelectAll();});
         Shortcut(VirtualKey.Left,VirtualKeyModifiers.Menu,()=>_journal.GoBack());
         Shortcut(VirtualKey.Right,VirtualKeyModifiers.Menu,()=>_journal.GoForward());
+    }
+    private bool IsSearchFocused()
+    {
+        if (XamlRoot is not { } root) return false;
+        for (DependencyObject? element = FocusManager.GetFocusedElement(root) as DependencyObject;
+             element is not null; element = VisualTreeHelper.GetParent(element))
+            if (ReferenceEquals(element, _search)) return true;
+        return false;
+    }
+    private void ActivateSearchResults()
+    {
+        _searchDismissed = false;
+        RevealSearchResults();
     }
     private void RevealSearchResults()
     {
@@ -163,7 +193,7 @@ public sealed class MainPage : Page
         brand.Children.Add(new ChartIcon { Glyph = ChartGlyph.Line, Width = 26, Height = 26, Tint = Windows.UI.Color.FromArgb(255,83,184,207) });
         brand.Children.Add(new TextBlock { Text = "CHARTSCENE", FontSize = 19, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
         Grid.SetColumn(brand,1); header.Children.Add(brand); Grid.SetColumn(_search,2); _search.HorizontalAlignment = HorizontalAlignment.Stretch; header.Children.Add(_search);
-        var browse = Button("navigation-toggle",ChartGlyph.Menu,"",()=>{_navigationOpen=!_navigationOpen;RebuildNavigation();ResizeWorkspace();},"Toggle example navigation"); Grid.SetColumn(browse,3); header.Children.Add(browse);
+        var browse = Button("navigation-toggle",ChartGlyph.Menu,"",()=>{_navigationOpen=!_navigationOpen;_searchDismissed=!_navigationOpen;RebuildNavigation();ResizeWorkspace();},"Toggle example navigation"); Grid.SetColumn(browse,3); header.Children.Add(browse);
         Root(Panel(header,new Thickness(0,0,0,1)),0);
     }
     private void BuildCommands()
@@ -277,7 +307,7 @@ public sealed class MainPage : Page
     private void OpenExample(ChartExample example)
     {
         _lastAction="example:"+example.Id;_actionSequence++;
-        _navigationOpen=false;_journal.Navigate(new(example.Id,Document.Example));ResizeWorkspace();
+        _searchDismissed=true;_navigationOpen=false;_journal.Navigate(new(example.Id,Document.Example));ResizeWorkspace();
     }
     private void ShowDocument(Document document)
     { if(_model is not null)_journal.Navigate(new(_example.Id,document)); }
@@ -449,11 +479,11 @@ public sealed class MainPage : Page
             controls=_controls.ToDictionary(p=>p.Key,p=>Bounds(p.Value)),catalog=_catalogDtos
         });
 #if __WASM__
-        var state=new BrowserSnapshot(_journal.HasCurrent?_journal.Current.Document.ToString():"Example",_journal.CanGoBack,_journal.CanGoForward,_modelLoads,_navigationBuilds,_searchIndex.Statistics.Executions,_shownResults?.Count??0,_sourceLoaded,_theme.IsDropDownOpen,ThemeFocusedIndex(),_actionSequence,_lastAction);
+        var state=new BrowserSnapshot(_journal.HasCurrent?_journal.Current.Document.ToString():"Example",_journal.CanGoBack,_journal.CanGoForward,_modelLoads,_navigationBuilds,_searchIndex.Statistics.Executions,_shownResults?.Count??0,_sourceLoaded,_theme.IsDropDownOpen,ThemeFocusedIndex(),_actionSequence,_lastAction,_navigationOpen,_searchDismissed,IsSearchFocused());
         Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.chartSceneBrowser="+JsonSerializer.Serialize(state,BrowserJsonContext.Default.BrowserSnapshot));
 #endif
     }
 }
-public sealed record BrowserSnapshot(string document,bool canBack,bool canForward,long modelLoads,int navigationBuilds,long searchExecutions,int resultCount,bool sourceLoaded,bool themeDropDownOpen,int themeFocusedIndex,long actionSequence,string lastAction);
+public sealed record BrowserSnapshot(string document,bool canBack,bool canForward,long modelLoads,int navigationBuilds,long searchExecutions,int resultCount,bool sourceLoaded,bool themeDropDownOpen,int themeFocusedIndex,long actionSequence,string lastAction,bool navigationOpen,bool searchDismissed,bool searchFocused);
 [JsonSerializable(typeof(BrowserSnapshot))]
 public partial class BrowserJsonContext:JsonSerializerContext;

@@ -148,6 +148,46 @@ with sync_playwright() as playwright:
             page.screenshot(path=str(out/'workbench-compact.png'))
             page.set_viewport_size({'width':1440,'height':1000});page.wait_for_function('window.chartScene.width===1440');bounds('theme');bounds('chart')
         test('responsive commands remain reachable',responsive)
+        def durable_dismissal():
+            loads=chrome()['modelLoads']; example=state()['exampleId']; observations=[]
+            for width,height in [(800,700),(1024,768),(1440,1000)]:
+                query('FifoCapacity')
+                page.wait_for_function("window.chartSceneBrowser.navigationOpen && window.chartSceneBrowser.resultCount===1")
+                page.keyboard.press('Escape')
+                page.wait_for_function("window.chartSceneBrowser.searchDismissed && !window.chartSceneBrowser.navigationOpen && window.chartScene.controls['navigation-panel']===null")
+                page.set_viewport_size({'width':width,'height':height})
+                page.wait_for_function('w=>window.chartScene.width===w',arg=width)
+                if state()['controls'].get('inspector-panel'):
+                    click('info-toggle')
+                    page.wait_for_function("window.chartScene.controls['inspector-panel']===null")
+                page.wait_for_function('w=>window.chartScene.controls.chart?.width>=w-40',arg=width)
+                # Each observation is an assertion, not a retry of a failed dismissal.
+                for sample in range(3):
+                    page.wait_for_timeout(100)
+                    observed={'width':width,'sample':sample,'browser':chrome(),'navigation':state()['controls']['navigation-panel']}
+                    observations.append(observed)
+                    assert observed['browser']['searchDismissed'] and not observed['browser']['navigationOpen'] and observed['navigation'] is None,observed
+                click('search')
+                page.wait_for_function("window.chartSceneBrowser.navigationOpen && !window.chartSceneBrowser.searchDismissed && window.chartScene.controls['navigation-panel']!==null")
+                page.keyboard.press('Escape')
+                page.wait_for_function("window.chartSceneBrowser.searchDismissed && window.chartScene.controls['navigation-panel']===null")
+            assert chrome()['modelLoads']==loads and state()['exampleId']==example
+            (out/'escape-resize-observations.json').write_text(json.dumps(observations,indent=2))
+        test('Escape dismissal survives resize and explicit pointer reactivation',durable_dismissal)
+        def keyboard_search_focus():
+            loads=chrome()['modelLoads']
+            click('navigation-toggle')
+            page.wait_for_function('window.chartSceneBrowser.navigationOpen===true')
+            click('navigation-toggle')
+            page.wait_for_function('window.chartSceneBrowser.navigationOpen===false')
+            page.keyboard.press('Shift+Tab')
+            page.wait_for_function('window.chartSceneBrowser.searchFocused && window.chartSceneBrowser.navigationOpen && !window.chartSceneBrowser.searchDismissed')
+            page.keyboard.insert_text('FifoCapacity')
+            page.wait_for_function('window.chartSceneBrowser.resultCount===1')
+            page.keyboard.press('Escape')
+            page.wait_for_function("window.chartSceneBrowser.searchDismissed && window.chartScene.controls['navigation-panel']===null")
+            assert chrome()['modelLoads']==loads
+        test('keyboard traversal reopens dismissed search without loading a model',keyboard_search_focus)
         def clean():assert not [entry for entry in logs if entry['type']=='pageerror'],logs
         test('examples workbench has no unhandled browser errors',clean)
         (out/'final-state.json').write_text(json.dumps({'chart':state(),'browser':chrome()},indent=2))
