@@ -1,3 +1,4 @@
+using ChartScene.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -15,7 +16,14 @@ public sealed partial class App:Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         MainWindow=new Window{Title="ChartScene — scientific charting"};
-        try { MainWindow.Content=new GalleryShell(); }
+        try
+        {
+            var shell=new GalleryShell();
+#if __WASM__
+            shell.Loaded+=RequestStartupFrame;
+#endif
+            MainWindow.Content=shell;
+        }
         catch(Exception error)
         {
             Console.Error.WriteLine(error); PlatformBridge.ReportFailure(error.ToString());
@@ -23,4 +31,27 @@ public sealed partial class App:Application
         }
         MainWindow.Activate();
     }
+#if __WASM__
+    private static async void RequestStartupFrame(object sender,RoutedEventArgs args)
+    {
+        var root=(FrameworkElement)sender;
+        root.Loaded-=RequestStartupFrame;
+        try
+        {
+            var result=await UnoBrowserStartup.EnsureInitialPresentationAsync(root, () =>
+                Uno.Foundation.WebAssemblyRuntime.InvokeJS("document.querySelector('#loading.uno-persistent-loader') !== null") == "true");
+            // A session can span several native composition callbacks. Do not call those
+            // callbacks one frame or a hardware presentation/FPS measurement.
+            Uno.Foundation.WebAssemblyRuntime.InvokeJS(
+                "window.chartSceneStartup={qualifiedUno:'6.7.135',sessions:1,active:false,compositionCallbacks:"
+                +result.CompositionCallbacks.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                +",detached:"+(result.Attached?"false":"true")+"}");
+        }
+        catch(Exception error)
+        {
+            Console.Error.WriteLine(error);
+            PlatformBridge.ReportFailure(error.ToString());
+        }
+    }
+#endif
 }
