@@ -18,11 +18,13 @@ public static class UnoBrowserStartup
     /// <summary>
     /// Called once on the UI thread after the window root loads. Completes only after Uno
     /// releases its own loader, or returns Attached=false when the root detaches.
+    /// The supplied predicate must only observe the host's pending loader on the UI thread.
     /// The temporary composition subscription is removed on every completion/error path.
     /// </summary>
-    public static async Task<BrowserStartupResult> EnsureInitialPresentationAsync(FrameworkElement root)
+    public static async Task<BrowserStartupResult> EnsureInitialPresentationAsync(FrameworkElement root, Func<bool> hasNativeLoader)
     {
         ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(hasNativeLoader);
 #if __WASM__
         if (!root.DispatcherQueue.HasThreadAccess || !root.IsLoaded || root.XamlRoot is not { } xamlRoot)
             throw new InvalidOperationException("Request startup presentation from a loaded window root on its UI thread.");
@@ -65,14 +67,14 @@ public static class UnoBrowserStartup
                 {
                     callbacks++;
                     if (!root.IsLoaded || !ReferenceEquals(root.XamlRoot, xamlRoot)) Finish(false);
-                    else if (!HasNativeLoader()) Finish(true);
+                    else if (!hasNativeLoader()) Finish(true);
                 }
                 catch (Exception error) { Finish(false, error); }
             }
             try
             {
                 if (!root.IsLoaded || !ReferenceEquals(root.XamlRoot, xamlRoot)) { Finish(false); return; }
-                if (!HasNativeLoader()) { Finish(true); return; }
+                if (!hasNativeLoader()) { Finish(true); return; }
                 root.Unloaded += OnUnloaded;
                 deadline.Tick += OnTimeout;
                 // Upstream: https://github.com/unoplatform/uno/pull/24260
@@ -96,9 +98,5 @@ public static class UnoBrowserStartup
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "get_FontPreloadTask")]
     private static extern Task FontPreloadTask(Application application);
 
-    // Read-only observation of the pinned host's completion signal. The host, never this
-    // adapter, owns loader removal. Failure to release it times out and unsubscribes above.
-    private static bool HasNativeLoader() =>
-        Uno.Foundation.WebAssemblyRuntime.InvokeJS("document.querySelector('#loading.uno-persistent-loader') !== null") == "true";
 #endif
 }

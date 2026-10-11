@@ -38,7 +38,8 @@ public sealed partial class App:Application
         root.Loaded-=RequestStartupFrame;
         try
         {
-            var result=await UnoBrowserStartup.EnsureInitialPresentationAsync(root);
+            var result=await UnoBrowserStartup.EnsureInitialPresentationAsync(root, () =>
+                Uno.Foundation.WebAssemblyRuntime.InvokeJS("document.querySelector('#loading.uno-persistent-loader') !== null") == "true");
             // A session can span several native composition callbacks. Do not call those
             // callbacks one frame or a hardware presentation/FPS measurement.
             Uno.Foundation.WebAssemblyRuntime.InvokeJS(
