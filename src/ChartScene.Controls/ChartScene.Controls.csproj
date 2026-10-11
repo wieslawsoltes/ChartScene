@@ -1,16 +1,22 @@
 <Project Sdk="Uno.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net10.0</TargetFrameworks>
+    <!-- GLCanvasElement has platform-specific assets. A portable net10.0 control
+         assembly does not receive its desktop or WebAssembly implementation. -->
+    <TargetFrameworks>net10.0-desktop;net10.0-browserwasm</TargetFrameworks>
+    <UnoSingleProject>true</UnoSingleProject>
     <OutputType>Library</OutputType>
     <IsPackable>true</IsPackable>
     <GenerateLibraryLayout>true</GenerateLibraryLayout>
     <UnoFeatures>SkiaRenderer;GLCanvas;</UnoFeatures>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Description>Reusable Uno 2D and GPU 3D chart surfaces and legends.</Description>
+    <Description>Reusable Uno 2D and GPU 3D chart surfaces and legends for desktop and WebAssembly.</Description>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../ChartScene.Rendering.OpenGL/ChartScene.Rendering.OpenGL.csproj" />
     <ProjectReference Include="../ChartScene.Interaction/ChartScene.Interaction.csproj" />
     <ProjectReference Include="../ChartScene.Rendering.Skia/ChartScene.Rendering.Skia.csproj" />
+    <!-- Uno.Sdk 6.7.30 adds GLCanvas implicitly on desktop; the browser host
+         requires an explicit reference to the WebGL-capable package. -->
+    <PackageReference Include="Uno.WinUI.Graphics3DGL" Version="6.7.135" Condition="'$(TargetFramework)' == 'net10.0-browserwasm'" />
   </ItemGroup>
 </Project>
