@@ -10,11 +10,19 @@ public sealed class SurfaceData3D
     public ReadOnlyMemory<double> XCoordinates=>_x;
     public ReadOnlyMemory<double> ZCoordinates=>_z;
     public ReadOnlyMemory<double> Heights=>_height;
-    public double this[int x,int z]=>_height[checked(z*Width+x)];
+    public double this[int x,int z]
+    {
+        get
+        {
+            if((uint)x >= (uint)Width) throw new ArgumentOutOfRangeException(nameof(x));
+            if((uint)z >= (uint)Depth) throw new ArgumentOutOfRangeException(nameof(z));
+            return _height[z*Width+x];
+        }
+    }
     public SurfaceData3D(double[] x,double[] z,double[] heights)
     {
         ArgumentNullException.ThrowIfNull(x); ArgumentNullException.ThrowIfNull(z); ArgumentNullException.ThrowIfNull(heights);
-        if(x.Length<2||z.Length<2||heights.Length!=checked(x.Length*z.Length)) throw new ArgumentException("Surface dimensions must match and contain at least 2 × 2 samples.");
+        if(x.Length<2||z.Length<2||heights.LongLength!=(long)x.Length*z.Length) throw new ArgumentException("Surface dimensions must match and contain at least 2 × 2 samples.");
         static void Coordinates(double[] values)
         {
             for(int i=0;i<values.Length;i++) if(!double.IsFinite(values[i])||i>0&&values[i]<=values[i-1]) throw new ArgumentException("Surface coordinates must be finite and strictly increasing.");
@@ -25,7 +33,9 @@ public sealed class SurfaceData3D
     }
     public static SurfaceData3D Uniform(int width,int depth,double xStart,double xStep,double zStart,double zStep,Func<int,int,double> height)
     {
-        if(width<2||depth<2||xStep<=0||zStep<=0) throw new ArgumentOutOfRangeException(nameof(width));
+        ArgumentNullException.ThrowIfNull(height);
+        if(width<2||depth<2||(long)width*depth>Array.MaxLength||!double.IsFinite(xStart)||!double.IsFinite(zStart)
+            ||!double.IsFinite(xStep)||!double.IsFinite(zStep)||xStep<=0||zStep<=0) throw new ArgumentOutOfRangeException(nameof(width));
         return new(Enumerable.Range(0,width).Select(i=>xStart+i*xStep).ToArray(),Enumerable.Range(0,depth).Select(i=>zStart+i*zStep).ToArray(),Enumerable.Range(0,checked(width*depth)).Select(i=>height(i%width,i/width)).ToArray());
     }
 }
@@ -64,15 +74,19 @@ public sealed class MeshBuffer3D
     public MeshTopology3D Topology { get; }
     public Bounds3D Bounds { get; }
     public int PrimitiveCount=>Topology==MeshTopology3D.Points?_vertices.Length:_indices.Length/3;
-    public bool HasTransparency=>_vertices.Any(v=>v.Color.A<255);
+    /// <summary>Computed once for this immutable buffer; camera frames never rescan vertex colors.</summary>
+    public bool HasTransparency { get; }
     public MeshBuffer3D(Vertex3D[] vertices,uint[] indices,MeshTopology3D topology,int[]? primitiveDataIndices=null)
     {
-        if(vertices.Length==0||vertices.Any(v=>!v.Position.IsFinite||!v.Normal.IsFinite||!float.IsFinite(v.Size))) throw new ArgumentException("Geometry must contain finite vertices.");
+        ArgumentNullException.ThrowIfNull(vertices); ArgumentNullException.ThrowIfNull(indices);
+        if(!Enum.IsDefined(topology)) throw new ArgumentOutOfRangeException(nameof(topology));
+        static bool Finite(Vector3D value)=>float.IsFinite((float)value.X)&&float.IsFinite((float)value.Y)&&float.IsFinite((float)value.Z);
+        if(vertices.Length==0||vertices.Any(v=>!Finite(v.Position)||!Finite(v.Normal)||!float.IsFinite(v.Size))) throw new ArgumentException("Normalized GPU vertices must remain finite when converted to single precision.");
         if(indices.Any(i=>i>=vertices.Length)||topology!=MeshTopology3D.Points&&indices.Length%3!=0) throw new ArgumentException("Invalid geometry indices.");
         int primitives=topology==MeshTopology3D.Points?vertices.Length:indices.Length/3;
         if(primitiveDataIndices is not null&&primitiveDataIndices.Length!=primitives) throw new ArgumentException("Primitive metadata count mismatch.");
         _vertices=(Vertex3D[])vertices.Clone(); _indices=(uint[])indices.Clone(); _primitiveDataIndices=primitiveDataIndices is null?Enumerable.Range(0,primitives).ToArray():(int[])primitiveDataIndices.Clone();
-        Topology=topology; Bounds=Bounds3D.FromPoints(_vertices.Select(v=>v.Position));
+        Topology=topology; Bounds=Bounds3D.FromPoints(_vertices.Select(v=>v.Position)); HasTransparency=_vertices.Any(v=>v.Color.A<255);
     }
     public float[] InterleavedVertices()
     {
