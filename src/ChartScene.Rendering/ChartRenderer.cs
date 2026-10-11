@@ -11,7 +11,7 @@ public sealed partial class ChartRenderer
     private long _renderedPoints;
     private readonly List<HitRegion> _hits=[];
     private readonly List<LegendItem> _legend=[];
-    private readonly Dictionary<(HeatmapGrid Grid,ColorMap Map,DoubleRange Range,double Opacity),RasterImage> _rasterCache=[];
+    private readonly Dictionary<(HeatmapGrid Grid,ColorMap Map,DoubleRange Range,HeatmapColorScaleMode Mode,double Opacity),RasterImage> _rasterCache=[];
     public ChartFrame Render(IChartCanvas target,ChartModel model,double width,double height,ChartViewState? view=null)
     {
         var timer=Stopwatch.StartNew(); var canvas=new CountingCanvas(target); _renderedPoints=0; _hits.Clear(); _legend.Clear();

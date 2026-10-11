@@ -6,5 +6,6 @@ public static partial class AdditionalTests
         SampleTests.Register(suite);
         DiagnosticTests.Register(suite);
         CursorSyncTests.Register(suite);
+        HeatmapLegendTests.Register(suite);
     }
 }

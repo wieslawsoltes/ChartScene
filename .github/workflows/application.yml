@@ -46,9 +46,13 @@ jobs:
           python -m http.server 8765 --bind 127.0.0.1 --directory artifacts/server > artifacts/logs/server.log 2>&1 &
           server=$!
           trap 'kill "$server"' EXIT
-          python tests/browser/validate.py --url http://127.0.0.1:8765/ChartScene/ --catalog
-          python tests/browser/validate-linked.py --url http://127.0.0.1:8765/ChartScene/
-          python tests/browser/validate-3d.py --url http://127.0.0.1:8765/ChartScene/
+          # Execute every suite even if an earlier one fails. Any failure still blocks deployment.
+          failed=0
+          python tests/browser/validate.py --url http://127.0.0.1:8765/ChartScene/ --catalog || failed=1
+          python tests/browser/validate-linked.py --url http://127.0.0.1:8765/ChartScene/ || failed=1
+          python tests/browser/validate-3d.py --url http://127.0.0.1:8765/ChartScene/ || failed=1
+          python tests/browser/validate-colors.py --url http://127.0.0.1:8765/ChartScene/ || failed=1
+          exit "$failed"
       - name: Package reusable libraries
         id: packages
         if: ${{ !cancelled() && steps.stage.outcome == 'success' }}
@@ -91,6 +95,8 @@ jobs:
             artifacts/browser-tests/
             artifacts/browser-tests-linked/
             artifacts/browser-tests-3d/
+            artifacts/browser-tests-colors/
+            artifacts/color-legends/
             artifacts/package-consumer/
             artifacts/core-tests.json
             artifacts/validated-commit.txt
