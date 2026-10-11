@@ -9,9 +9,12 @@
 | 2D browser | `tests/browser/validate.py --catalog` | All 43 examples, real pointer/keyboard input, PNG/CSV downloads and screenshots |
 | Linked charts | `tests/browser/validate-linked.py` | Unit conversion, cursor handoff, links/toggles, model replacement, resize and reattachment |
 | 3D browser | `tests/browser/validate-3d.py` | Real GLCanvas pixels, cameras/history, projections, selection, all 10 examples and reattachment |
+| Color legends | `tests/browser/validate-colors.py` | Shared scales, palettes, logarithms, orientation, source replacement and visible gradients |
+| Overview and scrollbars | `tests/browser/validate-overview.py` | Grip/body/keyboard navigation, ratios, shared history, unchanged-data preview reuse, replacement, resize and reload |
+| CPU performance | `IndexedResamplingTests`, `GridPerformanceTests` | Scalar-oracle equivalence, bounded traversal/storage, allocations and timing JSON in `artifacts/performance/` |
 | Packages | `tools/verify-packages.py` | Exact package identities and isolated desktop/browser consumer builds |
 
-The application workflow reruns core tests, builds desktop, publishes browser, serves the current output at `/ChartScene/`, runs all three browser suites and verifies packages. Native EGL checks run independently. Pages deployment requires both jobs to pass on main.
+The application workflow reruns core tests, builds desktop, publishes browser, serves the current output at `/ChartScene/`, runs all five browser suites and verifies packages. Native EGL checks run independently. Pages deployment requires both jobs to pass on main.
 
 Browser diagnostic objects are read-only observations. Tests never modify them to pass. Generated DTOs avoid recursive computed properties and remain trimming-safe. Managed render completion occurs before Uno framebuffer readback/composition: screenshot checks therefore poll actual visible pixels, bounded to eight seconds, requiring the unchanged color threshold in two consecutive observations. No input or forced render is used to make the initial frame appear. `presentation.json` records every observation. This is presentation correctness evidence, not a hardware latency benchmark.
 
@@ -33,6 +36,8 @@ In another terminal:
 python3 tests/browser/validate.py --url http://127.0.0.1:8765/ChartScene/ --catalog
 python3 tests/browser/validate-linked.py --url http://127.0.0.1:8765/ChartScene/
 python3 tests/browser/validate-3d.py --url http://127.0.0.1:8765/ChartScene/
+python3 tests/browser/validate-colors.py --url http://127.0.0.1:8765/ChartScene/
+python3 tests/browser/validate-overview.py --url http://127.0.0.1:8765/ChartScene/
 ```
 
 Native EGL tests require Linux EGL/OpenGL drivers. CI uses `libegl1-mesa-dev` and `libgl1-mesa-dri`. Mesa/SwiftShader may be software renderers; their results do not establish physical-GPU throughput or presentation latency.
@@ -58,6 +63,12 @@ GL resources must be deleted with their owning context current. The reusable Uno
 
 ## Artifacts and limits
 
-`application-validation` contains exact source, commit identity, build logs, browser results/images, failure details and package-consumer evidence. `gpu-validation` contains native fixtures. `browser-app` contains the staged application and `build-info.json`. `reusable-packages` contains NuGet artifacts. Always inspect conclusions and result JSON; artifact existence alone does not prove a pass.
+`application-validation` contains exact source, commit identity, build logs, browser results/images, failure details, CPU performance reports and package-consumer evidence. `gpu-validation` contains native fixtures. `browser-app` contains the staged application and `build-info.json`. `reusable-packages` contains NuGet artifacts. Always inspect conclusions and result JSON; artifact existence alone does not prove a pass.
 
 PR checks use GitHub's synthetic merge tree. Verify tested/merged trees and compare the deployed build identity to the main workflow. These are ChartScene regression/integration tests, not complete SciChart reference conformance. Cross-browser, Windows/macOS runtime, accessibility, physical touch, complete visual parity and hardware performance remain unqualified. CPU submission duration is not a GPU timestamp or FPS guarantee.
+
+## Overview correctness and performance evidence
+
+Native navigator tests use an independent scalar resampling oracle and cover all orientation/flip combinations, logarithmic coordinates, invalid bounds, history, cancellation and reentrant extent changes. Stationary logarithmic gestures preserve the original range bit-for-bit and create no phantom undo command. A source notification that replaces navigation extents cannot resurrect an obsolete gesture.
+
+The browser overview suite drives the real compiled controls. It verifies that dragging a million-sample selection changes the axis range without changing source revision/count or rebuilding the preview picture, while data replacement, themes and resizing do rebuild it. Streaming invalidates its preview when data changes; no static-cache speedup is claimed for continuously replaced FIFO snapshots. See [performance contracts](performance.md) for evidence interpretation.

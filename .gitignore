@@ -8,3 +8,5 @@ playwright-report/
 test-results/
 *.user
 .DS_Store
+__pycache__/
+*.pyc

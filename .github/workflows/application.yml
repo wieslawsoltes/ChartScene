@@ -155,3 +155,43 @@ jobs:
           path: site
       - id: deployment
         uses: actions/deploy-pages@v4
+      - name: Verify the public deployed commit
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+          EXPECTED_SHA: ${{ github.sha }}
+        shell: python
+        run: |
+          import datetime, json, os, pathlib, time, urllib.request
+          base = os.environ['PAGE_URL'].rstrip('/') + '/'
+          expected = os.environ['EXPECTED_SHA']
+          failure = None
+          for attempt in range(18):
+              try:
+                  request = urllib.request.Request(base + 'build-info.json?commit=' + expected,
+                      headers={'Cache-Control': 'no-cache'})
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      build = json.load(response)
+                  if build.get('commit') != expected:
+                      raise RuntimeError('Public build identity differs from merged source: ' + repr(build))
+                  with urllib.request.urlopen(base + '?commit=' + expected, timeout=20) as response:
+                      html = response.read().decode('utf-8')
+                      status = response.status
+                  if status != 200 or ('uno' not in html.lower() and '_framework' not in html):
+                      raise RuntimeError('The public entry point is not the staged Uno application')
+                  proof = {'url': base, 'expectedCommit': expected, 'buildInfo': build,
+                      'httpStatus': status, 'checkedUtc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                      'scope': 'Public HTTPS entry point and exact build identity; compiled runtime behavior is checked before deployment.'}
+                  pathlib.Path('deployment-proof.json').write_text(json.dumps(proof, indent=2))
+                  print(json.dumps(proof, indent=2), flush=True)
+                  break
+              except Exception as error:
+                  failure = error
+                  print('Public deployment not yet verified:', str(error), flush=True)
+                  if attempt < 17: time.sleep(5)
+          else:
+              raise RuntimeError('The public deployment could not be verified') from failure
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deployment-proof
+          path: deployment-proof.json
+          if-no-files-found: error

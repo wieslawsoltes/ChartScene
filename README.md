@@ -10,14 +10,14 @@ ChartScene targets publicly documented SciChart WPF behavior, but **is not a dro
 | --- | --- |
 | `ChartScene.Core` | Double-precision geometry, ranges, colors and observable infrastructure |
 | `ChartScene.Data` | Columnar data, FIFO storage, versioned snapshots and XY/XYZ/OHLC/statistical/heatmap data |
-| `ChartScene.Numerics` | Resampling, interpolation, FFTs, statistics and financial indicators |
+| `ChartScene.Numerics` | Indexed resampling, interpolation, FFTs, statistics and financial indicators |
 | `ChartScene.Charting` | Axes, series, themes, annotations, coordinate systems and stacking |
 | `ChartScene.Rendering` | Drawing contracts, layout, 2D geometry and diagnostics |
 | `ChartScene.Rendering.Skia` | Cached Skia rendering, shaped text and CPU offscreen PNG export |
 | `ChartScene.Interaction` | Hit testing, modifiers, undo/redo, linked ranges and linked cursors |
 | `ChartScene.ThreeD` | 3D data/models, cameras, normalization, mesh generation and spatial picking |
 | `ChartScene.Rendering.OpenGL` | OpenGL 3.3 / GLES 3 renderer with persistent geometry buffers |
-| `ChartScene.Controls` | Reusable Uno 2D/3D surfaces, legend and synchronization adapter |
+| `ChartScene.Controls` | Reusable Uno 2D/3D surfaces, legends, overview/scrollbars and synchronization adapter |
 | `ChartScene.Samples` | 43 deterministic 2D examples and streaming signals |
 | `ChartScene.Samples3D` | 10 deterministic 3D examples |
 
@@ -61,6 +61,48 @@ links.Add(millisecondsSurface,
 
 `RangeSyncGroup` and `ChartCursorSyncGroup` can also be used without Uno. Linked cursors respect different plot sizes, visible ranges, logarithmic transforms and rotated/flipped axes. The perpendicular cursor coordinate is a plot fraction, not an assertion of equivalent Y units. Non-Cartesian cursor linking is explicitly rejected.
 
+## Overview and independent scrollbars
+
+The **Overview** gallery demonstrates a one-million-sample signal, a logarithmic sweep, a streaming FIFO and a non-uniform heatmap. The main chart and its miniature share source data rather than copying or replacing the dataset when navigating.
+
+```csharp
+using ChartScene.Core;
+using Microsoft.UI.Xaml.Controls;
+
+var overview = new ChartOverview
+{
+    ParentSurface = surface,
+    Height = 125
+};
+var yScrollbar = new ChartScrollbar
+{
+    Axis = model.YAxis,
+    FullRange = new DoubleRange(-5, 5),
+    Orientation = Orientation.Vertical,
+    History = surface.Controller.History
+};
+// Put these reusable controls beside/below the chart in your own layout.
+```
+
+Drag the selection body to pan or either grip to resize it. Shift-drag creates a range; clicking outside recenters it. Wheel and keyboard navigation share the parent's undo history. Logarithmic panning preserves ratios. Escape cancels a gesture, while external range changes supersede a stale gesture. `Source`, `Axis` and `FullRange` can also be bound independently of `ParentSurface`; `ChartScrollbar` uses the same engine without drawing a miniature.
+
+The overview caches an immutable Skia picture. Moving the viewport redraws the selection without regenerating that picture; source, style, scale, theme and size changes invalidate it. An independent scrollbar without source-derived extents captures its initial axis range; set `FullRange` explicitly to choose another navigation domain. The current overview mirrors one Cartesian source series, not arbitrary WPF templates or an entire composite chart. Controls detach subscriptions and graphics resources on unload and rebuild on reload.
+
+## Heatmap color legends
+
+`HeatmapColorLegend` shares a `RenderableSeries` color map, range, opacity and linear/logarithmic color-scale transform with the actual heatmap. It supports horizontal, vertical and flipped layouts, formatted nonoverlapping labels, pointer inspection and source replacement. The **Color Legends** gallery shows two legends bound to one live-configurable heatmap.
+
+```csharp
+var legend = new HeatmapColorLegend { Series = heatmapSeries };
+// Set heatmapSeries.ColorMapRange for fixed color limits, or null for data-derived limits.
+```
+
+## Performance contracts
+
+The resampler uses weakly cached per-snapshot extrema pyramids, then caches unchanged viewport indices privately in each renderer. Duplicate X values, earliest tied extrema, endpoints and every NaN break retain their source indices. Logarithmic axes use logarithmic screen buckets. Non-uniform heatmaps visit only visible cells; contour geometry is cached separately from palette and viewport changes.
+
+[Performance documentation](docs/performance.md) distinguishes index construction, warmed queries, allocations and actual browser cache reuse. Deterministic correctness/work assertions are required; timings are evidence rather than fragile CI speed thresholds. There is no claim that these CPU optimizations establish complete SciChart or hardware-GPU performance parity.
+
 ## Rendering
 
 2D controls draw into Uno's Skia canvas; acceleration depends on the host. The 3D renderer issues real GL/GLES commands with depth-tested meshes, point markers and screen-space line quads. Camera movement reuses opaque geometry buffers; transparency sorting may update indices.
@@ -85,13 +127,13 @@ python3 tools/stage-site.py
 python3 -m http.server 8765 --directory artifacts/site
 ```
 
-Open the served root for 2D, `?view=3d` for 3D, or `?view=linked` for linked charts. Use HTTP/HTTPS rather than `file://`.
+Open the served root for 2D, `?view=3d` for 3D, `?view=linked` for linked charts, `?view=colors` for color legends, or `?view=overview` for overview navigation. Use HTTP/HTTPS rather than `file://`.
 
 The gallery includes example search, 29 2D series kinds, multiple numeric/log/date axes, annotations, selection, navigation history, a million-sample example, real-time FIFO streaming, themes and actual PNG/CSV downloads. The 3D gallery includes camera orbit/pan/zoom, projections, surface/grid modes, legends, picking and selection.
 
 ## Validation and deployment
 
-[Application CI](.github/workflows/application.yml) builds both Uno targets, serves the exact publish output at `/ChartScene/`, tests all three galleries through real browser input, packages all 12 libraries and compiles isolated package-only consumers. A native EGL job renders every 3D fixture through both desktop GL and GLES.
+[Application CI](.github/workflows/application.yml) builds both Uno targets, serves the exact publish output at `/ChartScene/`, tests all five galleries through real browser input, packages all 12 libraries and compiles isolated package-only consumers. A native EGL job renders every 3D fixture through both desktop GL and GLES.
 
 Pages deployment is gated on successful application and GPU jobs on `main`. Artifact existence or a successful publish alone is not deployment or runtime validation. `build-info.json` identifies the staged source commit. See [validation evidence and limits](docs/validation.md) and [remaining compatibility scope](docs/parity-status.md).
 

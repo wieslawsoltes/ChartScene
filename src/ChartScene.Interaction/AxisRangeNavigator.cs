@@ -15,7 +15,7 @@ public readonly record struct RangeNavigationLayout(RectD Track, RectD Selection
 public sealed class AxisRangeNavigator : IDisposable
 {
     private sealed record Gesture(DoubleRange Before, AutoRange AutoRange, RectD Track,
-        RangeNavigationPart Part, double Anchor, double Minimum, double Maximum);
+        RangeNavigationPart Part, double Anchor, double Minimum, double Maximum, DoubleRange AnchorRange, AutoRange AnchorAutoRange);
     private Gesture? _gesture;
     private DoubleRange _fullRange;
     private bool _vertical, _writing, _disposed;
@@ -116,13 +116,16 @@ public sealed class AxisRangeNavigator : IDisposable
         RangeNavigationPart part = newSelection ? RangeNavigationPart.NewSelection :
             Math.Min(da, db) <= 8 ? (da <= db ? RangeNavigationPart.MinimumGrip : RangeNavigationPart.MaximumGrip) : RangeNavigationPart.Body;
         double anchor = PointerFraction(point, track);
-        _gesture = new(Axis.VisibleRange, Axis.AutoRange, track, part, anchor, min, max);
+        var gesture = new Gesture(Axis.VisibleRange, Axis.AutoRange, track, part, anchor, min, max, Axis.VisibleRange, Axis.AutoRange);
+        _gesture = gesture;
         if (part == RangeNavigationPart.Body && !layout.Selection.Contains(point))
         {
             double size = Math.Clamp(max - min, MinimumSelectionFraction, 1);
             double start = Math.Clamp(anchor - size / 2, 0, 1 - size);
             Apply(start, start + size);
-            _gesture = _gesture with { Minimum = start, Maximum = start + size };
+            // A data-source notification may replace extents while Apply invokes subscribers.
+            if (!ReferenceEquals(_gesture, gesture)) { Notify(); return false; }
+            _gesture = gesture with { Minimum = start, Maximum = start + size, AnchorRange = Axis.VisibleRange, AnchorAutoRange = Axis.AutoRange };
         }
         Notify(); return true;
     }
@@ -131,6 +134,14 @@ public sealed class AxisRangeNavigator : IDisposable
         Check();
         if (_gesture is not { } gesture || !point.IsFinite) return;
         double current = PointerFraction(point, gesture.Track), min = gesture.Minimum, max = gesture.Maximum;
+        // Avoid logarithmic round-trip drift and phantom history for stationary or
+        // returned-to-origin gestures. Restore the exact recorded coordinates, not exp(log(x)).
+        if (current == gesture.Anchor && gesture.Part != RangeNavigationPart.NewSelection)
+        {
+            if (Axis.VisibleRange != gesture.AnchorRange || Axis.AutoRange != gesture.AnchorAutoRange)
+                Restore(gesture.AnchorRange, gesture.AnchorAutoRange);
+            return;
+        }
         switch (gesture.Part)
         {
             case RangeNavigationPart.MinimumGrip:
@@ -151,7 +162,9 @@ public sealed class AxisRangeNavigator : IDisposable
     public void End(PointD point)
     {
         Check(); if (_gesture is not { } gesture) return;
-        Move(point); _gesture = null;
+        Move(point);
+        if (!ReferenceEquals(_gesture, gesture)) return;
+        _gesture = null;
         Record("Overview navigation", gesture.Before, gesture.AutoRange); Notify();
     }
     public void Cancel()
@@ -164,6 +177,7 @@ public sealed class AxisRangeNavigator : IDisposable
     public void Pan(double amount)
     {
         Check(); if (!double.IsFinite(amount)) throw new ArgumentOutOfRangeException(nameof(amount));
+        if (amount == 0) return;
         Change("Overview pan", () =>
         {
             var (min, max) = Selection; double size = Math.Clamp(max - min, MinimumSelectionFraction, 1);
@@ -173,6 +187,7 @@ public sealed class AxisRangeNavigator : IDisposable
     public void Zoom(double factor, double anchor = .5)
     {
         Check(); if (!double.IsFinite(factor) || factor <= 0 || !double.IsFinite(anchor) || anchor < 0 || anchor > 1) throw new ArgumentOutOfRangeException(nameof(factor));
+        if (factor == 1) return;
         Change("Overview zoom", () =>
         {
             var (min, max) = Selection; double size = Math.Clamp((max - min) * factor, MinimumSelectionFraction, 1);
@@ -183,6 +198,7 @@ public sealed class AxisRangeNavigator : IDisposable
     public void SetStartFraction(double value)
     {
         Check(); if (!double.IsFinite(value)) throw new ArgumentOutOfRangeException(nameof(value));
+        if (value == Selection.Minimum && FullRange.Contains(Axis.VisibleRange.Min) && FullRange.Contains(Axis.VisibleRange.Max)) return;
         Change("Overview position", () =>
         {
             var (min, max) = Selection; double size = Math.Clamp(max - min, MinimumSelectionFraction, 1);

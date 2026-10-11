@@ -121,6 +121,43 @@ public static class RangeNavigatorTests
             axis.VisibleRange = new(30, 50); TestSuite.Equal(events, previous); n.Dispose();
             TestSuite.Throws<ObjectDisposedException>(() => n.Fit());
         });
+        suite.Run("overview stationary arbitrary logarithmic viewport stays bit-exact", () =>
+        {
+            var random = new Random(1337);
+            for (int i = 0; i < 64; i++)
+            {
+                var axis = new LogarithmicNumericAxis { VisibleRange = new(2 + random.NextDouble(), 70 + random.NextDouble()), AutoRange = AutoRange.Always };
+                using var n = new AxisRangeNavigator(axis, new(1, 1000));
+                var before = axis.VisibleRange;
+                var point = n.Layout(Track).Selection.Center;
+                n.Begin(point, Track); n.End(point);
+                TestSuite.Equal(axis.VisibleRange, before); TestSuite.Equal(axis.AutoRange, AutoRange.Always);
+                TestSuite.True(!n.History.CanUndo);
+            }
+        });
+        suite.Run("overview roundtrip gesture creates no phantom history", () =>
+        {
+            var axis = new LogarithmicNumericAxis { VisibleRange = new(2.731, 73.125), AutoRange = AutoRange.Always };
+            using var n = new AxisRangeNavigator(axis, new(1, 1000)); var before = axis.VisibleRange;
+            var point = n.Layout(Track).Selection.Center;
+            n.Begin(point, Track); n.Move(point + new PointD(40, 0)); n.End(point);
+            TestSuite.Equal(axis.VisibleRange, before); TestSuite.Equal(axis.AutoRange, AutoRange.Always); TestSuite.True(!n.History.CanUndo);
+        });
+        suite.Run("overview no-op navigation methods preserve exact coordinates", () =>
+        {
+            var axis = new LogarithmicNumericAxis { VisibleRange = new(2.731, 73.125), AutoRange = AutoRange.Always };
+            using var n = new AxisRangeNavigator(axis, new(1, 1000)); var before = axis.VisibleRange;
+            n.Pan(0); n.Zoom(1); n.SetStartFraction(n.Selection.Minimum);
+            TestSuite.Equal(axis.VisibleRange, before); TestSuite.Equal(axis.AutoRange, AutoRange.Always); TestSuite.True(!n.History.CanUndo);
+        });
+        suite.Run("overview extent change inside notification safely supersedes recenter", () =>
+        {
+            var axis = Axis(); using var n = new AxisRangeNavigator(axis, new(0, 100));
+            axis.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(AxisModel.VisibleRange)) n.FullRange = new(0, 200); };
+            n.Begin(Point(n, .9), Track); var external = axis.VisibleRange;
+            n.End(Point(n, .9)); n.Cancel();
+            TestSuite.Equal(axis.VisibleRange, external); TestSuite.True(!n.HasGesture && !n.History.CanUndo);
+        });
         suite.Run("overview validation rejects invalid ranges and gestures", () =>
         {
             var axis = Axis(); using var n = new AxisRangeNavigator(axis, new(0, 100));
