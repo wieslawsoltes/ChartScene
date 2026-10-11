@@ -14,7 +14,9 @@ from playwright.async_api import async_playwright
 parser = argparse.ArgumentParser()
 parser.add_argument('--url', default='http://127.0.0.1:8765/ChartScene/')
 parser.add_argument('--output', default='artifacts/browser-tests-startup')
+parser.add_argument('--repeats', type=int, default=3)
 args = parser.parse_args()
+if not 1 <= args.repeats <= 20: parser.error('--repeats must be between 1 and 20')
 out = Path(args.output); out.mkdir(parents=True, exist_ok=True)
 results, logs = [], []
 
@@ -22,10 +24,12 @@ async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(args=['--enable-webgl','--ignore-gpu-blocklist','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
         globals_by_view = {'2d':'chartScene', '3d':'chartScene3D', 'linked':'chartSceneLinked', 'colors':'chartSceneColors', 'overview':'chartSceneOverview', 'stacks':'chartSceneStacks'}
-        cases = [(name, 0) for name in globals_by_view] + [('stacks',250), ('stacks',700)]
+        base_cases = [(name, 0) for name in globals_by_view] + [('stacks',250), ('stacks',700)]
+        cases = [(view,delay,attempt) for attempt in range(args.repeats) for view,delay in base_cases]
         try:
-            for view, font_delay in cases:
-                name = f'{view} no-input startup font-delay-{font_delay}ms'
+            for view, font_delay, attempt in cases:
+                name = f'{view} no-input startup font-delay-{font_delay}ms attempt-{attempt+1}'
+                slug = f'{view}-{font_delay}-{attempt+1}'
                 started = time.perf_counter(); observations = []
                 context = await browser.new_context(viewport={'width':1440,'height':1000})
                 page = await context.new_page(); page.set_default_timeout(20_000)
@@ -44,7 +48,7 @@ async def main():
                         const fatal=window.chartScene?.fatalError;
                         if(fatal)throw new Error(fatal);
                         const s=window[key];if(s?.error)throw new Error(s.error);
-                        return s?.ready && window.chartSceneStartup?.requests===1;
+                        return s?.ready && window.chartSceneStartup?.sessions===1 && window.chartSceneStartup.active===false;
                     }''', arg=globals_by_view[view], timeout=120_000)
                     # A colored loader progress bar must never count as a presented chart.
                     # Observe its removal by Uno after presentation; never remove it here.
@@ -63,7 +67,7 @@ async def main():
                         observations.append({'coloredPixels':colored,'elapsedMs':(time.perf_counter()-started)*1000})
                         consecutive = consecutive+1 if colored > (500 if view == 'stacks' else 50) else 0
                         if consecutive >= 2:
-                            (out / f'{view}-{font_delay}.png').write_bytes(image_bytes)
+                            (out / f'{slug}.png').write_bytes(image_bytes)
                             break
                         await asyncio.sleep(.1)
                     assert consecutive >= 2, observations
@@ -73,16 +77,17 @@ async def main():
                         after = await page.evaluate('window.chartSceneStacks.frames')
                         assert after-before <= 3, ('Unexpected continuous redraw',before,after)
                     startup = await page.evaluate('window.chartSceneStartup')
-                    assert startup == {'qualifiedUno':'6.7.135','requests':1,'detached':False}, startup
+                    assert startup['qualifiedUno']=='6.7.135' and startup['sessions']==1 and startup['active'] is False and startup['detached'] is False, startup
+                    assert isinstance(startup['compositionCallbacks'],int) and startup['compositionCallbacks']>=0, startup
                     assert not errors, errors
-                    results.append({'name':name,'passed':True,'milliseconds':(time.perf_counter()-started)*1000,'delayedFontRequests':len(delayed_fonts),'observations':observations})
+                    results.append({'name':name,'passed':True,'milliseconds':(time.perf_counter()-started)*1000,'delayedFontRequests':len(delayed_fonts),'startup':startup,'observations':observations})
                     print('PASS',name,flush=True)
                 except Exception as error:
                     results.append({'name':name,'passed':False,'error':str(error),'trace':traceback.format_exc(),'observations':observations})
                     print('FAIL',name,error,flush=True)
-                    await page.screenshot(path=str(out / f'{view}-{font_delay}-failure.png'))
+                    await page.screenshot(path=str(out / f'{slug}-failure.png'))
                     state = await page.evaluate('key=>({gallery:window[key],startup:window.chartSceneStartup,fatal:window.chartScene?.fatalError,loader:document.querySelector("#loading")?.outerHTML})', globals_by_view[view])
-                    (out / f'{view}-{font_delay}-failure.json').write_text(json.dumps(state,indent=2))
+                    (out / f'{slug}-failure.json').write_text(json.dumps(state,indent=2))
                 finally:
                     (out / 'results.json').write_text(json.dumps({'total':len(results),'failed':sum(not r['passed'] for r in results),'tests':results},indent=2))
                     (out / 'console.json').write_text(json.dumps(logs,indent=2))

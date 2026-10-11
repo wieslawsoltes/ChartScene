@@ -38,10 +38,13 @@ public sealed partial class App:Application
         root.Loaded-=RequestStartupFrame;
         try
         {
-            bool requested=await UnoBrowserStartup.RequestInitialFrameAsync(root);
-            Uno.Foundation.WebAssemblyRuntime.InvokeJS(requested
-                ? "window.chartSceneStartup={qualifiedUno:'6.7.135',requests:1,detached:false}"
-                : "window.chartSceneStartup={qualifiedUno:'6.7.135',requests:0,detached:true}");
+            var result=await UnoBrowserStartup.EnsureInitialPresentationAsync(root);
+            // A session can span several native composition callbacks. Do not call those
+            // callbacks one frame or a hardware presentation/FPS measurement.
+            Uno.Foundation.WebAssemblyRuntime.InvokeJS(
+                "window.chartSceneStartup={qualifiedUno:'6.7.135',sessions:1,active:false,compositionCallbacks:"
+                +result.CompositionCallbacks.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                +",detached:"+(result.Attached?"false":"true")+"}");
         }
         catch(Exception error)
         {
