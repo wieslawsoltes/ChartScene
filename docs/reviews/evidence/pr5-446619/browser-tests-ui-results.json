@@ -1,0 +1,72 @@
+{
+  "total": 13,
+  "failed": 1,
+  "tests": [
+    {
+      "name": "examples workbench startup",
+      "passed": true,
+      "milliseconds": 3635.105332999956
+    },
+    {
+      "name": "compact vector rail and original-style chart layout",
+      "passed": true,
+      "milliseconds": 2698.3845280000196
+    },
+    {
+      "name": "source keyword search and unchanged-result reuse",
+      "passed": true,
+      "milliseconds": 1699.176098999942
+    },
+    {
+      "name": "example back and forward navigation",
+      "passed": true,
+      "milliseconds": 1713.886711999976
+    },
+    {
+      "name": "cached search rows activate repeatedly without redundant reloads",
+      "passed": false,
+      "error": "Page.wait_for_function: Timeout 20000ms exceeded.",
+      "trace": "Traceback (most recent call last):\n  File \"/home/runner/work/ChartScene/ChartScene/tests/browser/validate-browser-ui.py\", line 63, in test\n    action();assert not state().get('error'),state().get('error')\n    ^^^^^^^^\n  File \"/home/runner/work/ChartScene/ChartScene/tests/browser/validate-browser-ui.py\", line 95, in reselection\n    loads=chrome()['modelLoads'];choose('financial','Candlesticks and Bollinger bands')\n                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/ChartScene/ChartScene/tests/browser/validate-browser-ui.py\", line 39, in choose\n    query(text);bounds('example:'+identifier);click('example:'+identifier);ready(identifier)\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/ChartScene/ChartScene/tests/browser/validate-browser-ui.py\", line 30, in bounds\n    def bounds(name):return inputs.bounds(name)\n                            ^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/ChartScene/ChartScene/tests/browser/workbench_input.py\", line 25, in bounds\n    self.page.wait_for_function('''name => {\n  File \"/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/playwright/sync_api/_generated.py\", line 11559, in wait_for_function\n    self._sync(\n  File \"/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/playwright/_impl/_sync_base.py\", line 115, in _sync\n    return task.result()\n           ^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/playwright/_impl/_page.py\", line 1112, in wait_for_function\n    return await self._main_frame.wait_for_function(**locals_to_params(locals()))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/playwright/_impl/_frame.py\", line 860, in wait_for_function\n    await self._channel.send(\"waitForFunction\", self._timeout, params)\n  File \"/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/playwright/_impl/_connection.py\", line 69, in send\n    return await self._connection.wrap_api_call(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/playwright/_impl/_connection.py\", line 559, in wrap_api_call\n    raise rewrite_error(error, f\"{parsed_st['apiName']}: {error}\") from None\nplaywright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 20000ms exceeded.\n"
+    },
+    {
+      "name": "full factory source view and actual CSharp download",
+      "passed": true,
+      "milliseconds": 1742.5419730000158
+    },
+    {
+      "name": "home catalogue tiles navigate to real examples",
+      "passed": true,
+      "milliseconds": 2771.5937660000236
+    },
+    {
+      "name": "information panel toggle preserves available chart area",
+      "passed": true,
+      "milliseconds": 464.8241920000373
+    },
+    {
+      "name": "module reattachment retains selected example and zoom",
+      "passed": true,
+      "milliseconds": 1700.4660900000772
+    },
+    {
+      "name": "hidden streaming view pauses without losing FIFO data",
+      "passed": true,
+      "milliseconds": 1904.2197219999935
+    },
+    {
+      "name": "search keyboard shortcut and escape dismissal",
+      "passed": true,
+      "milliseconds": 93.64684799993483
+    },
+    {
+      "name": "responsive commands remain reachable",
+      "passed": true,
+      "milliseconds": 1571.2297029999718
+    },
+    {
+      "name": "examples workbench has no unhandled browser errors",
+      "passed": true,
+      "milliseconds": 7.55543899992972
+    }
+  ]
+}

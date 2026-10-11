@@ -1,0 +1,291 @@
+[
+  {
+    "target": "browser-search",
+    "positions": [
+      {
+        "x": 846.0,
+        "y": 66.0,
+        "bounds": {
+          "x": 606,
+          "y": 50,
+          "width": 480,
+          "height": 32
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "browser-search",
+    "positions": [
+      {
+        "x": 846.0,
+        "y": 66.0,
+        "bounds": {
+          "x": 606,
+          "y": 50,
+          "width": 480,
+          "height": 32
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "browser-example:live",
+    "positions": [
+      {
+        "x": 155.0,
+        "y": 189.0,
+        "bounds": {
+          "x": 43,
+          "y": 167,
+          "width": 224,
+          "height": 44
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "browser-search",
+    "positions": [
+      {
+        "x": 846.0,
+        "y": 66.0,
+        "bounds": {
+          "x": 606,
+          "y": 50,
+          "width": 480,
+          "height": 32
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "browser-example:financial",
+    "positions": [
+      {
+        "x": 155.0,
+        "y": 189.0,
+        "bounds": {
+          "x": 43,
+          "y": 167,
+          "width": 224,
+          "height": 44
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "browser-browser-back",
+    "positions": [
+      {
+        "x": 29.0,
+        "y": 65.0,
+        "bounds": {
+          "x": 12,
+          "y": 50,
+          "width": 34,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "browser-browser-forward",
+    "positions": [
+      {
+        "x": 107.0,
+        "y": 65.0,
+        "bounds": {
+          "x": 90,
+          "y": 50,
+          "width": 34,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "browser-search",
+    "positions": [
+      {
+        "x": 846.0,
+        "y": 66.0,
+        "bounds": {
+          "x": 606,
+          "y": 50,
+          "width": 480,
+          "height": 32
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "browser-source-tab",
+    "positions": [
+      {
+        "x": 1207.5,
+        "y": 112.0,
+        "bounds": {
+          "x": 1153,
+          "y": 97,
+          "width": 109,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "browser-download-source",
+    "positions": [
+      {
+        "x": 326.0,
+        "y": 157.0,
+        "bounds": {
+          "x": 298,
+          "y": 142,
+          "width": 56,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "browser-example-tab",
+    "positions": [
+      {
+        "x": 1106.0,
+        "y": 112.0,
+        "bounds": {
+          "x": 1062,
+          "y": 97,
+          "width": 88,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "browser-browser-home",
+    "positions": [
+      {
+        "x": 68.0,
+        "y": 65.0,
+        "bounds": {
+          "x": 51,
+          "y": 50,
+          "width": 34,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "browser-tile:overview",
+    "positions": [
+      {
+        "x": 193.5,
+        "y": 281.0,
+        "bounds": {
+          "x": 62,
+          "y": 247,
+          "width": 263,
+          "height": 68
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "browser-info-toggle",
+    "positions": [
+      {
+        "x": 1415.0,
+        "y": 112.0,
+        "bounds": {
+          "x": 1398,
+          "y": 97,
+          "width": 34,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "browser-info-toggle",
+    "positions": [
+      {
+        "x": 1415.0,
+        "y": 112.0,
+        "bounds": {
+          "x": 1398,
+          "y": 97,
+          "width": 34,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "browser-play",
+    "positions": [
+      {
+        "x": 18.5,
+        "y": 456.0,
+        "bounds": {
+          "x": 3,
+          "y": 441,
+          "width": 31,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "browser-info-toggle",
+    "positions": [
+      {
+        "x": 775.0,
+        "y": 112.0,
+        "bounds": {
+          "x": 758,
+          "y": 97,
+          "width": 34,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  }
+]

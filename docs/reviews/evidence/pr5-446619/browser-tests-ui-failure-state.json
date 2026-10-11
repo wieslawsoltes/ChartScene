@@ -1,0 +1,558 @@
+{
+  "chart": {
+    "ready": true,
+    "exampleId": "financial",
+    "theme": "Dark",
+    "mode": "Pan",
+    "streaming": false,
+    "frames": 10,
+    "error": null,
+    "renderer": "Uno Skia host (GPU availability is host-dependent)",
+    "width": 1440,
+    "height": 964,
+    "plot": {
+      "X": 65,
+      "Y": 53,
+      "Width": 1040,
+      "Height": 728,
+      "Right": 1105,
+      "Bottom": 781,
+      "Center": {
+        "X": 585,
+        "Y": 417,
+        "IsFinite": true,
+        "LengthSquared": 516114
+      },
+      "IsEmpty": false
+    },
+    "ranges": {
+      "x": {
+        "min": 1766884320000,
+        "max": 1774392480000
+      },
+      "y": {
+        "min": 94.68355378152955,
+        "max": 115.10819004747742
+      }
+    },
+    "statistics": {
+      "SourcePoints": 240,
+      "RenderedPoints": 240,
+      "DrawingCommands": 552,
+      "CpuMilliseconds": 25.7,
+      "ModelRevision": 20
+    },
+    "series": [
+      {
+        "Id": "1e16d0e17b7b462c86d3ddeea5d5cad6",
+        "name": "Bollinger \u00b12\u03c3",
+        "kind": "Band",
+        "visible": true,
+        "selected": 0,
+        "count": 80,
+        "revision": 1
+      },
+      {
+        "Id": "f5013ef6493d44fe89306bf7423f46bd",
+        "name": "Price",
+        "kind": "Candlestick",
+        "visible": true,
+        "selected": 0,
+        "count": 80,
+        "revision": 80
+      },
+      {
+        "Id": "ee5729609d79413b9447a526836822e2",
+        "name": "20-period SMA",
+        "kind": "Line",
+        "visible": true,
+        "selected": 0,
+        "count": 80,
+        "revision": 1
+      }
+    ],
+    "annotations": [],
+    "hits": 0,
+    "canUndo": false,
+    "canRedo": false,
+    "controls": {
+      "browser-back": {
+        "x": 12,
+        "y": 50,
+        "width": 34,
+        "height": 30
+      },
+      "browser-home": {
+        "x": 51,
+        "y": 50,
+        "width": 34,
+        "height": 30
+      },
+      "browser-forward": {
+        "x": 90,
+        "y": 50,
+        "width": 34,
+        "height": 30
+      },
+      "navigation-toggle": {
+        "x": 1394,
+        "y": 50,
+        "width": 34,
+        "height": 30
+      },
+      "example-tab": {
+        "x": 1062,
+        "y": 97,
+        "width": 88,
+        "height": 30
+      },
+      "source-tab": {
+        "x": 1153,
+        "y": 97,
+        "width": 109,
+        "height": 30
+      },
+      "export-png": {
+        "x": 1265,
+        "y": 97,
+        "width": 65,
+        "height": 30
+      },
+      "export-csv": {
+        "x": 1333,
+        "y": 97,
+        "width": 62,
+        "height": 30
+      },
+      "info-toggle": {
+        "x": 1398,
+        "y": 97,
+        "width": 34,
+        "height": 30
+      },
+      "zoom-rectangle": {
+        "x": 3,
+        "y": 135,
+        "width": 31,
+        "height": 30
+      },
+      "pan": {
+        "x": 3,
+        "y": 169,
+        "width": 31,
+        "height": 30
+      },
+      "home": {
+        "x": 3,
+        "y": 203,
+        "width": 31,
+        "height": 30
+      },
+      "select": {
+        "x": 3,
+        "y": 237,
+        "width": 31,
+        "height": 30
+      },
+      "annotate": {
+        "x": 3,
+        "y": 271,
+        "width": 31,
+        "height": 30
+      },
+      "undo": {
+        "x": 3,
+        "y": 305,
+        "width": 31,
+        "height": 30
+      },
+      "redo": {
+        "x": 3,
+        "y": 339,
+        "width": 31,
+        "height": 30
+      },
+      "zoom-in": {
+        "x": 3,
+        "y": 373,
+        "width": 31,
+        "height": 30
+      },
+      "zoom-out": {
+        "x": 3,
+        "y": 407,
+        "width": 31,
+        "height": 30
+      },
+      "play": {
+        "x": 3,
+        "y": 441,
+        "width": 31,
+        "height": 30
+      },
+      "navigation-panel": null,
+      "download-source": null,
+      "source-view": null,
+      "tile:overview": null,
+      "tile:live": null,
+      "tile:million": null,
+      "tile:fft": null,
+      "tile:logarithmic": null,
+      "tile:datetime": null,
+      "tile:multiple-axes": null,
+      "tile:flipped": null,
+      "tile:aspect-ratio": null,
+      "tile:annotations": null,
+      "tile:palette": null,
+      "tile:percent-stacked": null,
+      "tile:financial": null,
+      "tile:nonuniform-heatmap": null,
+      "tile:line": null,
+      "tile:digitalline": null,
+      "tile:spline": null,
+      "tile:mountain": null,
+      "tile:splinemountain": null,
+      "tile:scatter": null,
+      "tile:bubble": null,
+      "tile:column": null,
+      "tile:bar": null,
+      "tile:impulse": null,
+      "tile:band": null,
+      "tile:digitalband": null,
+      "tile:errorbars": null,
+      "tile:candlestick": null,
+      "tile:ohlc": null,
+      "tile:boxplot": null,
+      "tile:groupedboxplot": null,
+      "tile:heatmap": null,
+      "tile:contour": null,
+      "tile:vectorfield": null,
+      "tile:stackedcolumn": null,
+      "tile:stackedmountain": null,
+      "tile:stackedbar": null,
+      "tile:polarline": null,
+      "tile:radar": null,
+      "tile:pie": null,
+      "tile:donut": null,
+      "tile:ternaryscatter": null,
+      "tile:ternaryline": null,
+      "legend-toggle": {
+        "x": 1172,
+        "y": 342,
+        "width": 120,
+        "height": 28
+      },
+      "cursor-toggle": {
+        "x": 1172,
+        "y": 370,
+        "width": 137,
+        "height": 28
+      },
+      "labels-toggle": {
+        "x": 1172,
+        "y": 398,
+        "width": 120,
+        "height": 28
+      },
+      "annotation-kind": {
+        "x": 1172,
+        "y": 469,
+        "width": 252,
+        "height": 32
+      },
+      "x-min": {
+        "x": 1193,
+        "y": 543,
+        "width": 113,
+        "height": 32
+      },
+      "x-max": {
+        "x": 1311,
+        "y": 543,
+        "width": 113,
+        "height": 32
+      },
+      "y-min": {
+        "x": 1193,
+        "y": 589,
+        "width": 113,
+        "height": 32
+      },
+      "y-max": {
+        "x": 1311,
+        "y": 589,
+        "width": 113,
+        "height": 32
+      },
+      "apply-ranges": {
+        "x": 1172,
+        "y": 635,
+        "width": 113,
+        "height": 30
+      },
+      "data-expander": {
+        "x": 1172,
+        "y": 679,
+        "width": 252,
+        "height": 48
+      },
+      "inspector-panel": {
+        "x": 1155,
+        "y": 130,
+        "width": 285,
+        "height": 838
+      },
+      "theme": {
+        "x": 1312,
+        "y": 969,
+        "width": 120,
+        "height": 28
+      },
+      "chart": {
+        "x": 38,
+        "y": 130,
+        "width": 1117,
+        "height": 838
+      },
+      "search": {
+        "x": 606,
+        "y": 50,
+        "width": 480,
+        "height": 32
+      },
+      "navigation": null,
+      "example:financial": null
+    },
+    "catalog": [
+      {
+        "Id": "overview",
+        "Title": "Scientific signals",
+        "Category": "Getting started"
+      },
+      {
+        "Id": "live",
+        "Title": "Real-time FIFO signals",
+        "Category": "Performance"
+      },
+      {
+        "Id": "million",
+        "Title": "One million samples",
+        "Category": "Performance"
+      },
+      {
+        "Id": "fft",
+        "Title": "Frequency spectrum",
+        "Category": "Scientific"
+      },
+      {
+        "Id": "logarithmic",
+        "Title": "Logarithmic axes",
+        "Category": "Axes and layout"
+      },
+      {
+        "Id": "datetime",
+        "Title": "Date and time axis",
+        "Category": "Axes and layout"
+      },
+      {
+        "Id": "multiple-axes",
+        "Title": "Multiple independent axes",
+        "Category": "Axes and layout"
+      },
+      {
+        "Id": "flipped",
+        "Title": "Rotated and flipped axes",
+        "Category": "Axes and layout"
+      },
+      {
+        "Id": "aspect-ratio",
+        "Title": "Equal-scale scientific plot",
+        "Category": "Axes and layout"
+      },
+      {
+        "Id": "annotations",
+        "Title": "Editable annotations",
+        "Category": "Interaction"
+      },
+      {
+        "Id": "palette",
+        "Title": "Per-point palette provider",
+        "Category": "Styling"
+      },
+      {
+        "Id": "percent-stacked",
+        "Title": "100% stacked columns",
+        "Category": "Statistical"
+      },
+      {
+        "Id": "financial",
+        "Title": "Candlesticks and Bollinger bands",
+        "Category": "Financial"
+      },
+      {
+        "Id": "nonuniform-heatmap",
+        "Title": "Non-uniform heatmap",
+        "Category": "Scientific"
+      },
+      {
+        "Id": "line",
+        "Title": "Line chart",
+        "Category": "2D chart types"
+      },
+      {
+        "Id": "digitalline",
+        "Title": "Digital step line",
+        "Category": "2D chart types"
+      },
+      {
+        "Id": "spline",
+        "Title": "Monotone spline",
+        "Category": "2D chart types"
+      },
+      {
+        "Id": "mountain",
+        "Title": "Mountain area",
+        "Category": "2D chart types"
+      },
+      {
+        "Id": "splinemountain",
+        "Title": "Spline mountain",
+        "Category": "2D chart types"
+      },
+      {
+        "Id": "scatter",
+        "Title": "Scatter markers",
+        "Category": "2D chart types"
+      },
+      {
+        "Id": "bubble",
+        "Title": "Bubble color map",
+        "Category": "2D chart types"
+      },
+      {
+        "Id": "column",
+        "Title": "Grouped columns",
+        "Category": "2D chart types"
+      },
+      {
+        "Id": "bar",
+        "Title": "Horizontal bars",
+        "Category": "2D chart types"
+      },
+      {
+        "Id": "impulse",
+        "Title": "Impulse / stem chart",
+        "Category": "2D chart types"
+      },
+      {
+        "Id": "band",
+        "Title": "Crossing band fills",
+        "Category": "2D chart types"
+      },
+      {
+        "Id": "digitalband",
+        "Title": "Digital band chart",
+        "Category": "2D chart types"
+      },
+      {
+        "Id": "errorbars",
+        "Title": "Error bars",
+        "Category": "2D chart types"
+      },
+      {
+        "Id": "candlestick",
+        "Title": "Candlestick chart",
+        "Category": "Financial"
+      },
+      {
+        "Id": "ohlc",
+        "Title": "OHLC bars",
+        "Category": "Financial"
+      },
+      {
+        "Id": "boxplot",
+        "Title": "Box-and-whisker plot",
+        "Category": "Statistical"
+      },
+      {
+        "Id": "groupedboxplot",
+        "Title": "Grouped box plots",
+        "Category": "Statistical"
+      },
+      {
+        "Id": "heatmap",
+        "Title": "Uniform heatmap",
+        "Category": "Scientific"
+      },
+      {
+        "Id": "contour",
+        "Title": "Contour lines",
+        "Category": "Scientific"
+      },
+      {
+        "Id": "vectorfield",
+        "Title": "Vector field",
+        "Category": "Scientific"
+      },
+      {
+        "Id": "stackedcolumn",
+        "Title": "Stacked columns",
+        "Category": "Statistical"
+      },
+      {
+        "Id": "stackedmountain",
+        "Title": "Stacked mountain",
+        "Category": "Statistical"
+      },
+      {
+        "Id": "stackedbar",
+        "Title": "Stacked horizontal bars",
+        "Category": "Statistical"
+      },
+      {
+        "Id": "polarline",
+        "Title": "Polar line chart",
+        "Category": "Polar and circular"
+      },
+      {
+        "Id": "radar",
+        "Title": "Radar chart",
+        "Category": "Polar and circular"
+      },
+      {
+        "Id": "pie",
+        "Title": "Pie chart",
+        "Category": "Polar and circular"
+      },
+      {
+        "Id": "donut",
+        "Title": "Donut chart",
+        "Category": "Polar and circular"
+      },
+      {
+        "Id": "ternaryscatter",
+        "Title": "Ternary scatter",
+        "Category": "Scientific"
+      },
+      {
+        "Id": "ternaryline",
+        "Title": "Ternary line",
+        "Category": "Scientific"
+      }
+    ]
+  },
+  "browser": {
+    "document": "Example",
+    "canBack": true,
+    "canForward": false,
+    "modelLoads": 5,
+    "navigationBuilds": 3,
+    "searchExecutions": 2,
+    "resultCount": 1,
+    "sourceLoaded": false,
+    "themeDropDownOpen": false,
+    "themeFocusedIndex": -1,
+    "actionSequence": 4,
+    "lastAction": "browser-forward"
+  }
+}

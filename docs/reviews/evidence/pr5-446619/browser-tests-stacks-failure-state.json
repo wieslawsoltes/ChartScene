@@ -1,0 +1,84 @@
+{
+  "ready": true,
+  "error": null,
+  "generation": 0,
+  "edits": 0,
+  "batchNotifications": 0,
+  "frames": 3,
+  "sceneBuilds": 3,
+  "sceneReplays": 0,
+  "stackBuild": 1,
+  "sourcePoints": 15000,
+  "mode": "Absolute",
+  "middleVisible": true,
+  "theme": "Dark",
+  "min": -0.4999,
+  "max": 10.4979,
+  "hits": 0,
+  "revisions": [
+    1,
+    1,
+    1
+  ],
+  "top": [
+    6,
+    6.055090404648704,
+    5.847259606251557
+  ],
+  "plot": {
+    "x": 65,
+    "y": 135,
+    "width": 1363,
+    "height": 781
+  },
+  "controls": {
+    "mode": {
+      "x": 12,
+      "y": 44,
+      "width": 128,
+      "height": 30
+    },
+    "edit": {
+      "x": 148,
+      "y": 44,
+      "width": 112,
+      "height": 30
+    },
+    "replace": {
+      "x": 268,
+      "y": 44,
+      "width": 112,
+      "height": 30
+    },
+    "visibility": {
+      "x": 388,
+      "y": 44,
+      "width": 139,
+      "height": 30
+    },
+    "theme": {
+      "x": 535,
+      "y": 44,
+      "width": 88,
+      "height": 30
+    },
+    "fit": {
+      "x": 631,
+      "y": 44,
+      "width": 38,
+      "height": 30
+    },
+    "status": {
+      "x": 14,
+      "y": 979,
+      "width": 567,
+      "height": 27
+    },
+    "chart": {
+      "x": 0,
+      "y": 82,
+      "width": 1440,
+      "height": 891
+    }
+  }
+}

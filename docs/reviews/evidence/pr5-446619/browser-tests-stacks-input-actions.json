@@ -1,0 +1,155 @@
+[
+  {
+    "target": "stacks-fit",
+    "positions": [
+      {
+        "x": 650.0,
+        "y": 59.0,
+        "bounds": {
+          "x": 631,
+          "y": 44,
+          "width": 38,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "stacks-mode",
+    "positions": [
+      {
+        "x": 76.0,
+        "y": 59.0,
+        "bounds": {
+          "x": 12,
+          "y": 44,
+          "width": 128,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "stacks-edit",
+    "positions": [
+      {
+        "x": 204.0,
+        "y": 59.0,
+        "bounds": {
+          "x": 148,
+          "y": 44,
+          "width": 112,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "stacks-replace",
+    "positions": [
+      {
+        "x": 324.0,
+        "y": 59.0,
+        "bounds": {
+          "x": 268,
+          "y": 44,
+          "width": 112,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "stacks-visibility",
+    "positions": [
+      {
+        "x": 457.5,
+        "y": 59.0,
+        "bounds": {
+          "x": 388,
+          "y": 44,
+          "width": 139,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "stacks-visibility",
+    "positions": [
+      {
+        "x": 457.5,
+        "y": 59.0,
+        "bounds": {
+          "x": 388,
+          "y": 44,
+          "width": 139,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "stacks-theme",
+    "positions": [
+      {
+        "x": 579.0,
+        "y": 59.0,
+        "bounds": {
+          "x": 535,
+          "y": 44,
+          "width": 88,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "stacks-theme",
+    "positions": [
+      {
+        "x": 579.0,
+        "y": 59.0,
+        "bounds": {
+          "x": 535,
+          "y": 44,
+          "width": 88,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  },
+  {
+    "target": "stacks-mode",
+    "positions": [
+      {
+        "x": 76.0,
+        "y": 59.0,
+        "bounds": {
+          "x": 12,
+          "y": 44,
+          "width": 128,
+          "height": 30
+        }
+      }
+    ],
+    "presses": 1,
+    "delivered": true
+  }
+]

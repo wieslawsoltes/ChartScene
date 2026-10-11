@@ -1,0 +1,73 @@
+{
+  "total": 13,
+  "failed": 2,
+  "tests": [
+    {
+      "name": "stacked data startup",
+      "passed": true,
+      "milliseconds": 2529.361337999944
+    },
+    {
+      "name": "stacked data visible geometry",
+      "passed": false,
+      "error": "[{'elapsedMs': 882.8288800000337, 'coloredPixels': 0}, {'elapsedMs': 1840.8456980000665, 'coloredPixels': 0}, {'elapsedMs': 2056.228476000001, 'coloredPixels': 0}, {'elapsedMs': 2267.7683930000967, 'coloredPixels': 0}, {'elapsedMs': 2480.8279860000084, 'coloredPixels': 0}, {'elapsedMs': 2696.7571140000928, 'coloredPixels': 0}, {'elapsedMs': 2907.838145000028, 'coloredPixels': 0}, {'elapsedMs': 3121.01972500011, 'coloredPixels': 0}, {'elapsedMs': 3331.9179350000923, 'coloredPixels': 0}, {'elapsedMs': 3548.639226000091, 'coloredPixels': 0}, {'elapsedMs': 3764.529261000007, 'coloredPixels': 0}, {'elapsedMs': 3981.7283290000205, 'coloredPixels': 0}, {'elapsedMs': 4198.624511000048, 'coloredPixels': 0}, {'elapsedMs': 4415.419765000024, 'coloredPixels': 0}, {'elapsedMs': 4630.072050000081, 'coloredPixels': 0}, {'elapsedMs': 4840.346876000012, 'coloredPixels': 0}, {'elapsedMs': 5050.625228000058, 'coloredPixels': 0}, {'elapsedMs': 5263.333080000052, 'coloredPixels': 0}, {'elapsedMs': 5478.689780000082, 'coloredPixels': 0}, {'elapsedMs': 5694.182098000056, 'coloredPixels': 0}, {'elapsedMs': 5905.652510000095, 'coloredPixels': 0}, {'elapsedMs': 6124.079144000007, 'coloredPixels': 0}, {'elapsedMs': 6335.227560000021, 'coloredPixels': 0}, {'elapsedMs': 6548.579449000044, 'coloredPixels': 0}, {'elapsedMs': 6766.291314, 'coloredPixels': 0}, {'elapsedMs': 6981.453080000051, 'coloredPixels': 0}, {'elapsedMs': 7192.596244000015, 'coloredPixels': 0}, {'elapsedMs': 7403.800244000081, 'coloredPixels': 0}, {'elapsedMs': 7613.386656000102, 'coloredPixels': 0}, {'elapsedMs': 7827.747527000042, 'coloredPixels': 0}, {'elapsedMs': 8040.592128000071, 'coloredPixels': 0}]",
+      "trace": "Traceback (most recent call last):\n  File \"/home/runner/work/ChartScene/ChartScene/tests/browser/validate-stacks.py\", line 37, in test\n    action(); assert not state().get('error'), state().get('error')\n    ^^^^^^^^\n  File \"/home/runner/work/ChartScene/ChartScene/tests/browser/validate-stacks.py\", line 62, in pixels\n    assert consecutive>=2, samples\n           ^^^^^^^^^^^^^^\nAssertionError: [{'elapsedMs': 882.8288800000337, 'coloredPixels': 0}, {'elapsedMs': 1840.8456980000665, 'coloredPixels': 0}, {'elapsedMs': 2056.228476000001, 'coloredPixels': 0}, {'elapsedMs': 2267.7683930000967, 'coloredPixels': 0}, {'elapsedMs': 2480.8279860000084, 'coloredPixels': 0}, {'elapsedMs': 2696.7571140000928, 'coloredPixels': 0}, {'elapsedMs': 2907.838145000028, 'coloredPixels': 0}, {'elapsedMs': 3121.01972500011, 'coloredPixels': 0}, {'elapsedMs': 3331.9179350000923, 'coloredPixels': 0}, {'elapsedMs': 3548.639226000091, 'coloredPixels': 0}, {'elapsedMs': 3764.529261000007, 'coloredPixels': 0}, {'elapsedMs': 3981.7283290000205, 'coloredPixels': 0}, {'elapsedMs': 4198.624511000048, 'coloredPixels': 0}, {'elapsedMs': 4415.419765000024, 'coloredPixels': 0}, {'elapsedMs': 4630.072050000081, 'coloredPixels': 0}, {'elapsedMs': 4840.346876000012, 'coloredPixels': 0}, {'elapsedMs': 5050.625228000058, 'coloredPixels': 0}, {'elapsedMs': 5263.333080000052, 'coloredPixels': 0}, {'elapsedMs': 5478.689780000082, 'coloredPixels': 0}, {'elapsedMs': 5694.182098000056, 'coloredPixels': 0}, {'elapsedMs': 5905.652510000095, 'coloredPixels': 0}, {'elapsedMs': 6124.079144000007, 'coloredPixels': 0}, {'elapsedMs': 6335.227560000021, 'coloredPixels': 0}, {'elapsedMs': 6548.579449000044, 'coloredPixels': 0}, {'elapsedMs': 6766.291314, 'coloredPixels': 0}, {'elapsedMs': 6981.453080000051, 'coloredPixels': 0}, {'elapsedMs': 7192.596244000015, 'coloredPixels': 0}, {'elapsedMs': 7403.800244000081, 'coloredPixels': 0}, {'elapsedMs': 7613.386656000102, 'coloredPixels': 0}, {'elapsedMs': 7827.747527000042, 'coloredPixels': 0}, {'elapsedMs': 8040.592128000071, 'coloredPixels': 0}]\n"
+    },
+    {
+      "name": "stacked dark toolbar and status remain visible",
+      "passed": false,
+      "error": "('Dark', 'mode', 'control has no readable text contrast', 243, 243)",
+      "trace": "Traceback (most recent call last):\n  File \"/home/runner/work/ChartScene/ChartScene/tests/browser/validate-stacks.py\", line 37, in test\n    action(); assert not state().get('error'), state().get('error')\n    ^^^^^^^^\n  File \"/home/runner/work/ChartScene/ChartScene/tests/browser/validate-stacks.py\", line 75, in <lambda>\n    test('stacked dark toolbar and status remain visible', lambda: chrome_pixels('Dark'))\n                                                                   ^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/runner/work/ChartScene/ChartScene/tests/browser/validate-stacks.py\", line 72, in chrome_pixels\n    assert hi-lo>60, (theme,name,'control has no readable text contrast',lo,hi)\n           ^^^^^^^^\nAssertionError: ('Dark', 'mode', 'control has no readable text contrast', 243, 243)\n"
+    },
+    {
+      "name": "rollover reuses stacked generation",
+      "passed": true,
+      "milliseconds": 499.82130299997607
+    },
+    {
+      "name": "zoom and fit reuse stack buffers",
+      "passed": true,
+      "milliseconds": 602.7793239999255
+    },
+    {
+      "name": "runtime percent mode redraws and batches notifications",
+      "passed": true,
+      "milliseconds": 2020.1219540000466
+    },
+    {
+      "name": "atomic Y range edits rebuild one generation",
+      "passed": true,
+      "milliseconds": 392.76337999990574
+    },
+    {
+      "name": "whole data replacement remains coherent",
+      "passed": true,
+      "milliseconds": 315.7139349999625
+    },
+    {
+      "name": "series visibility invalidates cumulative values",
+      "passed": true,
+      "milliseconds": 797.5855670000556
+    },
+    {
+      "name": "theme redraw preserves stack generation",
+      "passed": true,
+      "milliseconds": 2132.298645999981
+    },
+    {
+      "name": "absolute mode restores source-scale cumulative values",
+      "passed": true,
+      "milliseconds": 422.50063400001636
+    },
+    {
+      "name": "stacked view detach and reattach",
+      "passed": true,
+      "milliseconds": 2586.697346000051
+    },
+    {
+      "name": "stacked data has no unhandled errors",
+      "passed": true,
+      "milliseconds": 2.6978829999961818
+    }
+  ]
+}
