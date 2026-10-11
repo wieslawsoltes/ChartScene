@@ -20,6 +20,7 @@ public sealed class GalleryShell : UserControl
     public GalleryShell()
     {
         RequestedTheme=ElementTheme.Dark;HorizontalContentAlignment=HorizontalAlignment.Stretch;VerticalContentAlignment=VerticalAlignment.Stretch;
+        KeyboardNavigationScope.SetIsEnabled(this,true);
         _factories=new(){["2d"]=()=>new MainPage(),["3d"]=()=>new ThreeDPage(),["linked"]=()=>new LinkedChartsPage(),["colors"]=()=>new ColorLegendsPage(),["overview"]=()=>new OverviewPage(),["stacks"]=()=>new StackedDataPage()};
         _root.RowDefinitions.Add(new(){Height=new GridLength(36)});_root.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});
         var tabs=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4,Padding=new Thickness(10,3,10,3)};
