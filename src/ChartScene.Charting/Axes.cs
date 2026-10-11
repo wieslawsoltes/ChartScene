@@ -21,6 +21,7 @@ public class AxisModel : ObservableObject
     private ColorRgba? _color;
     private IReadOnlyList<string> _labels=Array.Empty<string>();
     private IAxisLabelProvider? _labelProvider;
+    private DoubleRange? _zoomExtentsRange;
     public string Id { get=>_id; set { ArgumentException.ThrowIfNullOrWhiteSpace(value); Set(ref _id,value); } }
     public string AxisTitle { get=>_title; set=>Set(ref _title,value??""); }
     public string TextFormatting { get=>_format; set=>Set(ref _format,value??""); }
@@ -30,7 +31,11 @@ public class AxisModel : ObservableObject
         get=>_visibleRange;
         set { if(!value.IsValid||Scale==AxisScale.Logarithmic&&value.Min<=0) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _visibleRange,value); }
     }
-    public DoubleRange? ZoomExtentsRange { get; set; }
+    public DoubleRange? ZoomExtentsRange
+    {
+        get=>_zoomExtentsRange;
+        set { if(value is { } range && (!range.IsValid || Scale==AxisScale.Logarithmic && range.Min<=0)) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _zoomExtentsRange,value); }
+    }
     public AxisScale Scale
     {
         get=>_scale;
@@ -48,7 +53,11 @@ public class AxisModel : ObservableObject
     public double GrowByLower { get=>_growLower; set { if(!double.IsFinite(value)||value<0) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _growLower,value); } }
     public double GrowByUpper { get=>_growUpper; set { if(!double.IsFinite(value)||value<0) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _growUpper,value); } }
     public double MajorDelta { get=>_majorDelta; set { if(!double.IsNaN(value)&&(!double.IsFinite(value)||value<=0)) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _majorDelta,value); } }
-    public IReadOnlyList<string> Labels { get=>_labels; set=>Set(ref _labels,value??Array.Empty<string>()); }
+    public IReadOnlyList<string> Labels
+    {
+        get=>_labels;
+        set { string[] labels=value?.Select(v=>v??"").ToArray()??[]; if(!_labels.SequenceEqual(labels)) Set(ref _labels,Array.AsReadOnly(labels)); }
+    }
     public IAxisLabelProvider? LabelProvider { get=>_labelProvider; set=>Set(ref _labelProvider,value); }
     internal bool HasAutoRanged { get; set; }
     public double ToScale(double value)=>Scale==AxisScale.Logarithmic?(value>0?Math.Log(value,LogarithmicBase):double.NaN):value;

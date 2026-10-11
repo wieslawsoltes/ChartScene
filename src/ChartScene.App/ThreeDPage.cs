@@ -6,6 +6,7 @@ using ChartScene.Samples3D;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
 namespace ChartScene.App;
@@ -51,6 +52,8 @@ public sealed class ThreeDPage : Page
         _surface.SelectionChanged += (_, _) => { if (!_changing && _model is not null && _surface.SelectedItem is SurfaceDrawMode mode) foreach (var s in _model.RenderableSeries) s.SurfaceDrawMode = mode; };
         _grid.Checked += (_, _) => { if (!_changing && _model is not null) _model.ShowGrid = true; }; _grid.Unchecked += (_, _) => { if (!_changing && _model is not null) _model.ShowGrid = false; };
         _theme.SelectionChanged += (_, _) => ApplyTheme();
+        _surface.DropDownOpened += (_, _) => Update(); _surface.DropDownClosed += (_, _) => Update();
+        _theme.DropDownOpened += (_, _) => Update(); _theme.DropDownClosed += (_, _) => Update();
         _chart.RenderCompleted += (_, _) => Update();
         _timer.Tick += (_, _) => Update();
         Loaded += (_, _) => { if (_model is null) Load(_index); _timer.Start(); }; Unloaded += (_, _) => _timer.Stop();
@@ -61,7 +64,7 @@ public sealed class ThreeDPage : Page
         var button = new Button { Content = text, MinHeight = 30, FontSize = 12, Padding = new Thickness(11, 3, 11, 3) };
         button.Click += (_, _) => action(); panel.Children.Add(button); Register(id, button);
     }
-    private void Register(string id, FrameworkElement control) { _controls[id] = control; AutomationProperties.SetAutomationId(control, "3d-" + id); }
+    private void Register(string id, FrameworkElement control) { _controls[id] = control; AutomationProperties.SetAutomationId(control, "3d-" + id); UiInputTrace.Register(control,"3d-"+id); }
     private void Load(int index)
     {
         _changing = true;
@@ -88,6 +91,16 @@ public sealed class ThreeDPage : Page
         if (!e.IsLoaded || e.ActualWidth < 1 || e.ActualHeight < 1 || e.Visibility != Visibility.Visible) return null;
         var p = e.TransformToVisual(null).TransformPoint(new Point(0, 0)); return new(p.X, p.Y, e.ActualWidth, e.ActualHeight);
     }
+    private int FocusedIndex(ComboBox box)
+    {
+        DependencyObject? focused=FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
+        while(focused is not null)
+        {
+            if(focused is ComboBoxItem item) return box.IndexFromContainer(item);
+            focused=VisualTreeHelper.GetParent(focused);
+        }
+        return -1;
+    }
     private void Update()
     {
         if (_model is null || !IsLoaded) return;
@@ -103,6 +116,8 @@ public sealed class ThreeDPage : Page
             uploadedBytes = stats?.UploadedBytes ?? 0, drawCalls = stats?.DrawCalls ?? 0, driver = stats?.Driver ?? "", width = ActualWidth, height = ActualHeight,
             selected = _model.RenderableSeries.Sum(s => s.SelectedIndices.Count), canUndo = _chart.History.CanUndo, canRedo = _chart.History.CanRedo,
             grid = _model.ShowGrid, surfaceMode = _model.RenderableSeries[0].SurfaceDrawMode.ToString(), theme = _model.Theme.Name,
+            surfaceDropDownOpen = _surface.IsDropDownOpen, themeDropDownOpen = _theme.IsDropDownOpen,
+            surfaceFocusedIndex = FocusedIndex(_surface), themeFocusedIndex = FocusedIndex(_theme),
             camera = new(camera.Yaw, camera.Pitch, camera.Distance, camera.OrthographicWidth, camera.Projection.ToString(), camera.Target.X, camera.Target.Y, camera.Target.Z),
             controls = _controls.ToDictionary(p => p.Key, p => Bounds(p.Value)),
             catalog = SampleCatalog3D.Examples.Select(e => new CatalogEntryDto(e.Id, e.Title, "3D")).ToArray()

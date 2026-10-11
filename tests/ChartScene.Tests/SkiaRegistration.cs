@@ -10,5 +10,10 @@ public static partial class AdditionalTests
         IndexedResamplingTests.Register(suite);
         RangeNavigatorTests.Register(suite);
         GridPerformanceTests.Register(suite);
+        DataIntegrityTests.Register(suite);
+        HitTestIntegrityTests.Register(suite);
+        GraphicsIntegrityTests.Register(suite);
+        StackCacheTests.Register(suite);
+        SceneCacheTests.Register(suite);
     }
 }

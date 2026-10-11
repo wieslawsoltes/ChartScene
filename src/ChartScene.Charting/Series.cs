@@ -22,6 +22,16 @@ public class RenderableSeries : ObservableObject,IDisposable
     private ColorMap _colorMap=ColorMap.Thermal;
     private DoubleRange? _colorMapRange;
     private HeatmapColorScaleMode _colorScaleMode;
+    private StackMode _stackMode;
+    private VectorColorMode _vectorColor=VectorColorMode.ByMagnitude;
+    private VectorLengthMode _vectorLength=VectorLengthMode.DataUnits;
+    private double _vectorScale=1,_headLength=6,_headWidth=4,_vectorSpacing=8,_donutRatio=.55;
+    private bool _filledHead=true,_resampling=true;
+    private PolarConnectionMode _polarConnection=PolarConnectionMode.Arc;
+    private IReadOnlyList<double> _contourLevels=Array.Empty<double>();
+    private IReadOnlyList<string> _pointLabels=Array.Empty<string>();
+    private IPaletteProvider? _paletteProvider;
+    private IDataLabelProvider? _dataLabelProvider;
     public SeriesKind Kind { get; }
     public string Id { get; set; }=Guid.NewGuid().ToString("N");
     public string SeriesName { get=>_name; set=>Set(ref _name,value??""); }
@@ -63,21 +73,43 @@ public class RenderableSeries : ObservableObject,IDisposable
             Set(ref _colorScaleMode,value);
         }
     }
-    public StackMode StackMode { get; set; }
-    public VectorColorMode VectorColorMode { get; set; }=VectorColorMode.ByMagnitude;
-    public VectorLengthMode VectorLengthMode { get; set; }=VectorLengthMode.DataUnits;
-    public double VectorScale { get; set; }=1;
-    public double ArrowHeadLength { get; set; }=6;
-    public double ArrowHeadWidth { get; set; }=4;
-    public double VectorMinimumSpacing { get; set; }=8;
-    public bool IsArrowHeadFilled { get; set; }=true;
-    public bool IsResamplingEnabled { get; set; }=true;
-    public PolarConnectionMode PolarConnectionMode { get; set; }=PolarConnectionMode.Arc;
-    public double DonutHoleRatio { get; set; }=.55;
-    public IReadOnlyList<double> ContourLevels { get; set; }=Array.Empty<double>();
-    public IReadOnlyList<string> PointLabels { get; set; }=Array.Empty<string>();
-    public IPaletteProvider? PaletteProvider { get; set; }
-    public IDataLabelProvider? DataLabelProvider { get; set; }
+    public StackMode StackMode { get=>_stackMode; set { CheckEnum(value); Set(ref _stackMode,value); } }
+    public VectorColorMode VectorColorMode { get=>_vectorColor; set { CheckEnum(value); Set(ref _vectorColor,value); } }
+    public VectorLengthMode VectorLengthMode { get=>_vectorLength; set { CheckEnum(value); Set(ref _vectorLength,value); } }
+    public double VectorScale { get=>_vectorScale; set { if(!double.IsFinite(value)) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _vectorScale,value); } }
+    public double ArrowHeadLength { get=>_headLength; set { CheckNonnegative(value); Set(ref _headLength,value); } }
+    public double ArrowHeadWidth { get=>_headWidth; set { CheckNonnegative(value); Set(ref _headWidth,value); } }
+    public double VectorMinimumSpacing { get=>_vectorSpacing; set { CheckNonnegative(value); Set(ref _vectorSpacing,value); } }
+    public bool IsArrowHeadFilled { get=>_filledHead; set=>Set(ref _filledHead,value); }
+    public bool IsResamplingEnabled { get=>_resampling; set=>Set(ref _resampling,value); }
+    public PolarConnectionMode PolarConnectionMode { get=>_polarConnection; set { CheckEnum(value); Set(ref _polarConnection,value); } }
+    public double DonutHoleRatio
+    {
+        get=>_donutRatio;
+        set { if(!double.IsFinite(value)||value<0||value>1) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _donutRatio,value); }
+    }
+    /// <summary>Owned immutable level list. Assign a replacement to invalidate contour rendering.</summary>
+    public IReadOnlyList<double> ContourLevels
+    {
+        get=>_contourLevels;
+        set
+        {
+            double[] copy=value?.ToArray()??[];
+            if(copy.Any(v=>!double.IsFinite(v))) throw new ArgumentException("Contour levels must be finite.",nameof(value));
+            if(!_contourLevels.SequenceEqual(copy)) Set(ref _contourLevels,Array.AsReadOnly(copy));
+        }
+    }
+    public IReadOnlyList<string> PointLabels
+    {
+        get=>_pointLabels;
+        set
+        {
+            string[] copy=value?.Select(v=>v??"").ToArray()??[];
+            if(!_pointLabels.SequenceEqual(copy)) Set(ref _pointLabels,Array.AsReadOnly(copy));
+        }
+    }
+    public IPaletteProvider? PaletteProvider { get=>_paletteProvider; set=>Set(ref _paletteProvider,value); }
+    public IDataLabelProvider? DataLabelProvider { get=>_dataLabelProvider; set=>Set(ref _dataLabelProvider,value); }
     public HashSet<int> SelectedIndices { get; }=[];
     public IDataSeries? DataSeries
     {
@@ -100,6 +132,7 @@ public class RenderableSeries : ObservableObject,IDisposable
     public bool IsCircular=>Kind is SeriesKind.Pie or SeriesKind.Donut;
     public RenderableSeries(SeriesKind kind=SeriesKind.Line)=>Kind=kind;
     public void Invalidate()=>RaisePropertyChanged("Content");
+    private static void CheckEnum<T>(T value) where T:struct,Enum { if(!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(nameof(value)); }
     private static void CheckNonnegative(double value) { if(!double.IsFinite(value)||value<0) throw new ArgumentOutOfRangeException(nameof(value)); }
     private void OnDataChanged(object? sender,EventArgs e)=>RaisePropertyChanged("DataRevision");
     public void Dispose() { if(_data is not null) _data.DataSeriesChanged-=OnDataChanged; }

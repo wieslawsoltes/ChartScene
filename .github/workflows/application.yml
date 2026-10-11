@@ -53,6 +53,7 @@ jobs:
           python tests/browser/validate-3d.py --url http://127.0.0.1:8765/ChartScene/ || failed=1
           python tests/browser/validate-colors.py --url http://127.0.0.1:8765/ChartScene/ || failed=1
           python tests/browser/validate-overview.py --url http://127.0.0.1:8765/ChartScene/ || failed=1
+          python tests/browser/validate-stacks.py --url http://127.0.0.1:8765/ChartScene/ || failed=1
           exit "$failed"
       - name: Package reusable libraries
         id: packages
@@ -98,6 +99,7 @@ jobs:
             artifacts/browser-tests-3d/
             artifacts/browser-tests-colors/
             artifacts/browser-tests-overview/
+            artifacts/browser-tests-stacks/
             artifacts/performance/
             artifacts/color-legends/
             artifacts/package-consumer/

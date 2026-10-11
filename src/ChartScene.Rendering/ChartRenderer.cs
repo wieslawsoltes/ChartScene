@@ -31,7 +31,7 @@ public sealed partial class ChartRenderer
         layout=ChartLayout.Measure(canvas,model,width,height);
         DrawBackground(canvas,model,layout);
         DrawAnnotations(canvas,model,layout,AnnotationLayer.BelowSeries);
-        var stacks=StackCalculator.Calculate(model);
+        var stacks=StackCalculator.Capture(model);
         canvas.Save(); canvas.Clip(layout.PlotArea);
         try
         {
