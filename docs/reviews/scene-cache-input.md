@@ -24,6 +24,8 @@ Optional `inputTrace=1` diagnostics observe managed routed pointer events with t
 
 The test helper sends a single pointer move/down/up sequence and waits for observed managed delivery before advancing, then the test checks the intended semantic result. It does not repeat clicks until a test passes. Popup tests observe actual open state and keyboard focus between keys. Initial stacked-chart screenshots are sampled for at most eight seconds and must meet the unchanged visible-geometry threshold twice consecutively, without forced rendering or injected wake-up input. The evidence is retained in `managed-input.json` and `presentation.json`.
 
+Screenshot inspection after a green run also found white-on-white toolbar/status text in the dark Stacked Data page: the page had no explicit themed background. Its chrome now follows the chart background and muted foreground, and browser tests check text contrast in every toolbar button and the status line in both themes.
+
 These changes make failures attributable; final browser workflow results, not the existence of these helpers, establish whether the implementation passes. All six galleries, native GL/GLES fixtures, package builds and isolated consumers remain required before merging/deployment. No failed assertion is downgraded to a warning.
 
 ## Remaining scope

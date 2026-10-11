@@ -61,6 +61,18 @@ with sync_playwright() as p:
             (out/'presentation.json').write_text(json.dumps(samples,indent=2))
             assert consecutive>=2, samples
         test('stacked data visible geometry', pixels)
+        def chrome_pixels(theme):
+            path=out/('stacked-chrome-'+theme.lower()+'.png'); page.screenshot(path=str(path))
+            with Image.open(path) as image:
+                gray=image.convert('L')
+                for name in ['mode','edit','replace','visibility','theme','fit','status']:
+                    b=state()['controls'][name]
+                    crop=gray.crop((int(b['x']+4),int(b['y']+3),int(b['x']+b['width']-4),int(b['y']+b['height']-3)))
+                    lo,hi=crop.getextrema()
+                    assert hi-lo>60, (theme,name,'control has no readable text contrast',lo,hi)
+                    if theme=='Dark': assert lo<80 and hi>100, (theme,name,lo,hi)
+                    else: assert lo<180 and hi>220, (theme,name,lo,hi)
+        test('stacked dark toolbar and status remain visible', lambda: chrome_pixels('Dark'))
         def rollover():
             before = state()
             page.mouse.move(*point(.2)); page.mouse.move(*point(.7), steps=15)
@@ -107,7 +119,8 @@ with sync_playwright() as p:
         def theme():
             before = state(); click('theme'); assert state()['theme'] == 'Light'
             assert state()['stackBuild'] == before['stackBuild'] and state()['revisions'] == before['revisions']
-            page.screenshot(path=str(out/'stacked-light.png')); click('theme')
+            chrome_pixels('Light')
+            page.screenshot(path=str(out/'stacked-light.png')); click('theme'); chrome_pixels('Dark')
         test('theme redraw preserves stack generation', theme)
         def absolute():
             before = state(); click('mode'); after = state()

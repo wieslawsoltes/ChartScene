@@ -7,6 +7,7 @@ using ChartScene.Data;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
 
 namespace ChartScene.App;
@@ -36,7 +37,7 @@ public sealed class StackedDataPage : Page
         toolbar.Children.Add(Button("theme", "Light / dark", Theme));
         toolbar.Children.Add(Button("fit", "Fit", () => _chart.Controller.ZoomExtents()));
         root.Children.Add(new ScrollViewer { Content = toolbar, HorizontalScrollMode = ScrollMode.Enabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollMode = ScrollMode.Disabled });
-        Grid.SetRow(_chart, 1); Grid.SetRow(_status, 2); root.Children.Add(_chart); root.Children.Add(_status); Content = root;
+        Grid.SetRow(_chart, 1); Grid.SetRow(_status, 2); root.Children.Add(_chart); root.Children.Add(_status); Content = root; ApplyChrome(); Register("status", _status);
         _model.XAxis.AxisTitle = "Time (s)"; _model.YAxis.AxisTitle = "Amplitude";
         for (int channel = 0; channel < 3; channel++)
         {
@@ -98,6 +99,13 @@ public sealed class StackedDataPage : Page
             _model.Theme = light ? ChartTheme.Light : ChartTheme.Dark;
             for (int i = 0; i < 3; i++) { _model.RenderableSeries[i].Stroke = _model.Theme.Palette[i]; _model.RenderableSeries[i].Fill = _model.Theme.Palette[i].WithAlpha(170); }
         });
+        ApplyChrome();
+    }
+    private void ApplyChrome()
+    {
+        var background = _model.Theme.Background; var foreground = _model.Theme.Muted;
+        if (Content is Grid root) root.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(background.A, background.R, background.G, background.B));
+        _status.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(foreground.A, foreground.R, foreground.G, foreground.B));
     }
     private Button Button(string id, string label, Action action)
     {
