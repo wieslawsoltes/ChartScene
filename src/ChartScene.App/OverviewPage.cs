@@ -159,7 +159,7 @@ public sealed class OverviewPage : Page
         _status.Text = error ?? $"{_model.RenderableSeries[0].DataSeries?.Count ?? _model.RenderableSeries[0].HeatmapGrid?.Values.Length ?? 0:N0} source samples · Preview recordings {_overview.PreviewBuildCount} · Viewport and cursor moves reuse the miniature · {(_streaming ? "Streaming" : "Paused")}";
 #if __WASM__
         var snapshot = new OverviewSnapshot(error is null && _chart.LastFrame is not null && _overview.LastLayout is not null && _scrollbar.LastLayout is not null,
-            error, _presetId, _generation, _streaming, _model.Theme.Name, _model.XAxis.FlippedCoordinates,
+            error, _presetId, _preset.IsDropDownOpen, _generation, _streaming, _model.Theme.Name, _model.XAxis.FlippedCoordinates,
             _model.XAxis.VisibleRange.Min, _model.XAxis.VisibleRange.Max, _model.YAxis.VisibleRange.Min, _model.YAxis.VisibleRange.Max,
             _overview.Navigator?.FullRange.Min ?? 0, _overview.Navigator?.FullRange.Max ?? 1,
             _model.RenderableSeries[0].DataSeries?.Count ?? _model.RenderableSeries[0].HeatmapGrid?.Values.Length ?? 0,
@@ -172,7 +172,7 @@ public sealed class OverviewPage : Page
 }
 
 public sealed record OverviewLayoutSnapshot(ControlBounds track, ControlBounds selection, double minimumX, double minimumY, double maximumX, double maximumY);
-public sealed record OverviewSnapshot(bool ready, string? error, string preset, int generation, bool streaming, string theme, bool flipped,
+public sealed record OverviewSnapshot(bool ready, string? error, string preset, bool presetOpen, int generation, bool streaming, string theme, bool flipped,
     double min, double max, double yMin, double yMax, double fullMin, double fullMax, int sourcePoints, long dataRevision,
     long previewBuilds, long chartFrames, long overviewFrames, bool canUndo, bool canRedo, OverviewLayoutSnapshot? overview,
     OverviewLayoutSnapshot? scrollbar, Dictionary<string, ControlBounds?> controls);

@@ -45,11 +45,17 @@ with sync_playwright() as playwright:
         old = state(); drag(at(a), at(b), shift=True)
         wait_range_changed(old); page.wait_for_timeout(250)
     def choose(index):
-        click('preset'); page.keyboard.press('Home')
+        # Input can be queued before Uno has opened and focused the popup. Await its
+        # actual state instead of letting Enter reopen it after premature key events.
+        if not state()['presetOpen']: click('preset')
+        page.wait_for_function('window.chartSceneOverview.presetOpen===true')
+        page.keyboard.press('Home')
         for _ in range(index): page.keyboard.press('ArrowDown')
         page.keyboard.press('Enter')
         identifier = ['million','logarithmic','streaming','heatmap'][index]
-        ready(identifier); page.wait_for_timeout(350)
+        ready(identifier)
+        page.wait_for_function('window.chartSceneOverview.presetOpen===false')
+        page.wait_for_timeout(350)
     def near(a, b, tolerance=1e-8):
         assert math.isfinite(a) and abs(a-b) <= tolerance*max(1, abs(b)), (a, b)
     def stable():
@@ -158,6 +164,11 @@ with sync_playwright() as playwright:
             before=state(); g=before['overview']; drag((g['minimumX'],g['minimumY']),at(.25)); wait_range_changed(before)
             near(state()['max'],before['max'],1e-7); assert 0<state()['min']<before['min']
         test('overview logarithmic grip resizing',log_grips)
+        def log_noop():
+            before=stable(); page.mouse.click(*center()); after=stable()
+            assert after['min']==before['min'] and after['max']==before['max']
+            assert after['previewBuilds']==before['previewBuilds']
+        test('overview stationary log click preserves exact range',log_noop)
         def theme():
             before=state(); click('theme'); page.wait_for_function("window.chartSceneOverview.theme==='Light'")
             page.wait_for_function('n=>window.chartSceneOverview.previewBuilds>n',arg=before['previewBuilds']); stable(); pixels('overview-light')
