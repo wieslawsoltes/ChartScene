@@ -1,36 +1,49 @@
-# Composite keyboard navigation
+# Browser accessibility and keyboard navigation
 
-Run `38179439010` at `ae1c2255` confirmed that the first real Shift+Tab from
-the focused chart left managed focus on the chart; no focus transition was
-reported. The improved fixture therefore exposed a genuine missing native
-navigation hand-off, not merely an unverified menu adjacency assumption.
-All other workbench tests in its early artifact `11716628510` passed.
+## Observed behavior and corrected diagnosis
 
-`KeyboardNavigationScope.IsEnabled` is an opt-in attached property in the reusable
-controls package. The gallery shell enables it once. It handles only an
-**unhandled Tab** (Shift selects Previous) and delegates to the public
-`FocusManager.TryMoveFocus` overload with `SearchRoot = root.XamlRoot.Content`.
-The pinned implementation only permits Next/Previous with the public window
-content as the search root; passing an arbitrary nested composite would throw.
-The attached element owns the routed-input scope, while Uno owns window traversal.
-Native tab ordering, disabled/collapsed controls and focus rules remain owned by Uno; there
-is no hardcoded search target, synthetic key, test-only focus assignment or
-separate list of focusable controls.
+Runs `38179439010` and `38180308999` confirmed chart focus but observed no managed
+focus transition after the first Shift+Tab. The extra public focus-scope handler
+did not change this and has been removed, together with its shell attachment.
 
-Control/Alt combinations and already-handled editor/descendant keys are left
-alone. Successful focus movement marks the routed event handled, preventing a
-second traversal by an outer host. A detached root does nothing; disabling the
-property removes the handler. The root owns the static delegate and no global
-collection retains controls. Popups outside this visual scope are not traversed.
+Inspection of the exact Uno 6.7.135 browser keyboard source explains why: when
+the accessibility opt-in button is present and DOM focus is on the document body,
+the host deliberately lets the browser process Tab before dispatching a managed
+keyboard event. Reverse Tab from that boundary does not mean reverse traversal
+from the managed chart. A managed bubbling handler cannot repair an event the
+host intentionally does not dispatch.
 
-Primary pinned host contracts:
+## Application behavior
 
-- https://github.com/unoplatform/uno/blob/6.7.135/src/Uno.UI/UI/Xaml/Input/FocusManager.cs
-- https://github.com/unoplatform/uno/blob/6.7.135/src/Uno.UI/UI/Input/InputKeyboardSource.cs
-- https://github.com/unoplatform/uno/blob/6.7.135/doc/articles/features/focus-management.md
+The WebAssembly entry point now sets
+`Uno.UI.FeatureConfiguration.AutomationPeer.AutoEnableAccessibility = true`
+**before building the host**. This is a normal browser application setting,
+not an inputTrace/test-only switch. Uno builds its native semantic DOM without
+requiring users to find and activate the screen-reader-only enable button.
+Keyboard navigation remains entirely in Uno's original implementation.
 
-The existing real-keyboard fixture must pass without changing its stall, cycle,
-reachability, reopening, typing, Escape or model-retention assertions. All
-existing application, native graphics and package-consumer gates remain required.
-This addition is not a full accessibility or cross-platform keyboard-parity
-certificate.
+No application code removes an accessibility button, assigns focus to a test
+target, synthesizes keys, builds a parallel focus tree, or overrides handled
+editor keys. Desktop startup is unchanged. The ineffective `KeyboardNavigationScope`
+prototype was deleted rather than retained as an unnecessary compatibility layer.
+
+The semantic DOM has a memory/CPU cost. ChartScene's existing chart automation
+peer summarizes the chart; this setting does not intentionally create one DOM
+element per plotted data point. It is not a zero-cost or FPS improvement claim.
+
+## Validation
+
+The existing real Shift+Tab traversal test is unchanged: it establishes chart
+focus through a real pointer click, observes every managed transition, rejects
+stalls/cycles/missing focus, and requires search reopening, typing, Escape and
+unchanged model identity. All original browser, startup, graphics and consumer
+checks remain mandatory. Optional traces collect focus identities only, not text.
+
+These fixtures do not certify NVDA, VoiceOver, all accessible names or complete
+screen-reader parity. Broader accessibility qualification remains outstanding.
+
+## Primary pinned contracts
+
+- https://github.com/unoplatform/uno/blob/6.7.135/src/Uno.UI.Runtime.Skia.WebAssembly.Browser/ts/Runtime/BrowserKeyboardInputSource.ts
+- https://github.com/unoplatform/uno/blob/6.7.135/src/Uno.UI.Runtime.Skia.WebAssembly.Browser/ts/Runtime/Accessibility.ts
+- https://github.com/unoplatform/uno/blob/6.7.135/src/Uno.UI/FeatureConfiguration.cs
