@@ -12,7 +12,7 @@ concurrency:
 jobs:
   browser-and-desktop:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -40,26 +40,48 @@ jobs:
       - run: python -m playwright install --with-deps chromium
       - name: Validate compiled browser at repository base path
         run: |
+          set -euo pipefail
           mkdir -p artifacts/server/ChartScene
           cp -a artifacts/site/. artifacts/server/ChartScene/
           python -m http.server 8765 --bind 127.0.0.1 --directory artifacts/server > artifacts/logs/server.log 2>&1 &
           server=$!
           trap 'kill "$server"' EXIT
           python tests/browser/validate.py --url http://127.0.0.1:8765/ChartScene/ --catalog
+          python tests/browser/validate-linked.py --url http://127.0.0.1:8765/ChartScene/
           python tests/browser/validate-3d.py --url http://127.0.0.1:8765/ChartScene/
       - name: Package reusable libraries
+        id: packages
+        if: ${{ !cancelled() && steps.stage.outcome == 'success' }}
         run: |
           set -euo pipefail
           for project in Core Data Numerics Charting Rendering Rendering.Skia Interaction ThreeD Rendering.OpenGL Controls Samples Samples3D; do
             dotnet pack "src/ChartScene.$project" -c Release -o artifacts/packages
           done
           test "$(find artifacts/packages -name '*.nupkg' | wc -l)" -eq 12
-      - name: Preserve exact source
+      - name: Compile isolated package-only consumers
+        if: ${{ !cancelled() && steps.packages.outcome == 'success' }}
+        run: python3 tools/verify-packages.py
+      - name: Print preserved browser failure diagnostics
+        if: failure()
+        shell: python
+        run: |
+          from pathlib import Path
+          import json
+          for directory in sorted(Path('artifacts').glob('browser-tests*')):
+              for name in ('results.json', 'console.json'):
+                  path = directory / name
+                  if not path.is_file(): continue
+                  value = json.loads(path.read_text())
+                  if name == 'console.json': value = value[-100:]
+                  print('\n====', path, '====\n', json.dumps(value, indent=2)[-50000:], flush=True)
+      - name: Preserve exact source and graphics dependency metadata
         if: always()
         run: |
-          mkdir -p artifacts
+          mkdir -p artifacts/logs
           git rev-parse HEAD > artifacts/validated-commit.txt
           git archive --format=zip --output=artifacts/source.zip HEAD
+          find "$HOME/.nuget/packages/uno.winui.graphics3dgl" -name '*.nuspec' -exec cat {} \; > artifacts/logs/gl-package-metadata.txt 2>/dev/null || true
+          cat artifacts/logs/gl-package-metadata.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -67,12 +89,14 @@ jobs:
           path: |
             artifacts/logs/
             artifacts/browser-tests/
+            artifacts/browser-tests-linked/
             artifacts/browser-tests-3d/
+            artifacts/package-consumer/
             artifacts/core-tests.json
             artifacts/validated-commit.txt
             artifacts/source.zip
       - uses: actions/upload-artifact@v4
-        if: success()
+        if: ${{ !cancelled() && steps.packages.outcome == 'success' }}
         with:
           name: reusable-packages
           path: artifacts/packages/
