@@ -11,5 +11,6 @@ public static partial class AdditionalTests
         RangeNavigatorTests.Register(suite);
         GridPerformanceTests.Register(suite);
         DataIntegrityTests.Register(suite);
+        HitTestIntegrityTests.Register(suite);
     }
 }
