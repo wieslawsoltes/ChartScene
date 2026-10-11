@@ -13,5 +13,6 @@ public static partial class AdditionalTests
         DataIntegrityTests.Register(suite);
         HitTestIntegrityTests.Register(suite);
         GraphicsIntegrityTests.Register(suite);
+        StackCacheTests.Register(suite);
     }
 }

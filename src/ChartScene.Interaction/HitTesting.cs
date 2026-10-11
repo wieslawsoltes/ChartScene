@@ -91,7 +91,7 @@ public sealed class ChartHitTester
                 if (!output.TryGetValue(hit.Series, out var old) || value.Distance < old.Distance) output[hit.Series] = value;
             }
         }
-        var stacks = StackCalculator.Calculate(model);
+        var stacks = StackCalculator.Capture(model);
         foreach (var series in model.RenderableSeries.Where(s => s.IsVisible))
         {
             var projection = _frame.Layout.Projection(model, series);
@@ -110,7 +110,7 @@ public sealed class ChartHitTester
                 continue;
             }
             if (series.DataSeries is not { } source) continue;
-            var snapshot = source.Snapshot(); if (snapshot.Count == 0) continue;
+            var snapshot = stacks.TryGetValue(series, out var captured) ? captured.Snapshot : source.Snapshot(); if (snapshot.Count == 0) continue;
             if (series.IsCircular)
             {
                 var hit = PieHit(series, snapshot, _frame.Layout.PlotArea, point); if (hit is not null) output[series] = hit;
@@ -139,7 +139,7 @@ public sealed class ChartHitTester
                     }
                 }
             }
-            StackedValues? stacked = stacks.GetValueOrDefault(series);
+            StackedSeriesValues? stacked = stacks.GetValueOrDefault(series);
             double Y(int i) => stacked is null ? snapshot[series.YChannel, i] : stacked.Upper[i];
             SeriesHit? best = null; double bestSecondaryDistance = double.PositiveInfinity;
             void Consider(SeriesHit candidate)

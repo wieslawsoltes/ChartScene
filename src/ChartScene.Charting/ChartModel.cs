@@ -16,6 +16,12 @@ public sealed class ChartModel:ObservableObject,IDisposable
     private long _revision;
     private readonly HashSet<INotifyPropertyChanged> _observed=[];
     private bool _disposed;
+    private readonly object _changeGate=new();
+    private int _suspended;
+    private bool _pending;
+    private double? _aspectRatio;
+    private AspectRatioMode _aspectMode=AspectRatioMode.Fit;
+    private bool _polarDegrees=true;
     public ObservableCollection<AxisModel> XAxes { get; }=[];
     public ObservableCollection<AxisModel> YAxes { get; }=[];
     public ObservableCollection<RenderableSeries> RenderableSeries { get; }=[];
@@ -27,9 +33,17 @@ public sealed class ChartModel:ObservableObject,IDisposable
     public ChartTheme Theme { get=>_theme; set { ArgumentNullException.ThrowIfNull(value); Set(ref _theme,value); } }
     public CoordinateSystem CoordinateSystem { get=>_coordinates; set=>Set(ref _coordinates,value); }
     public bool ShowLegend { get=>_legend; set=>Set(ref _legend,value); }
-    public double? AspectRatio { get; set; }
-    public AspectRatioMode AspectRatioMode { get; set; }=AspectRatioMode.Fit;
-    public bool PolarAnglesInDegrees { get; set; }=true;
+    public double? AspectRatio
+    {
+        get=>_aspectRatio;
+        set { if(value is { } ratio&&(!double.IsFinite(ratio)||ratio<=0)) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _aspectRatio,value); }
+    }
+    public AspectRatioMode AspectRatioMode
+    {
+        get=>_aspectMode;
+        set { if(!Enum.IsDefined(value)) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _aspectMode,value); }
+    }
+    public bool PolarAnglesInDegrees { get=>_polarDegrees; set=>Set(ref _polarDegrees,value); }
     public long Revision=>Interlocked.Read(ref _revision);
     public event EventHandler? Changed;
     public ChartModel()
@@ -48,7 +62,36 @@ public sealed class ChartModel:ObservableObject,IDisposable
         foreach(var item in next.Except(_observed)) { item.PropertyChanged+=OnObjectChanged; _observed.Add(item); }
     }
     private void OnObjectChanged(object? sender,PropertyChangedEventArgs e)=>Invalidate();
-    public void Invalidate() { if(_disposed) return; Interlocked.Increment(ref _revision); Changed?.Invoke(this,EventArgs.Empty); }
+    /// <summary>
+    /// Coalesces Changed notifications for a batch. Properties and Revision remain current;
+    /// this is notification batching, not rollback or cross-series storage isolation.
+    /// Mutate model collections on their owning UI thread. Data callbacks may be concurrent.
+    /// </summary>
+    public IDisposable SuspendUpdates()
+    {
+        lock(_changeGate) { ObjectDisposedException.ThrowIf(_disposed,this); _suspended=checked(_suspended+1); }
+        return new ActionDisposable(()=>
+        {
+            bool notify;
+            lock(_changeGate)
+            {
+                if(_disposed) return;
+                notify=--_suspended==0&&_pending;
+                if(notify) _pending=false;
+            }
+            if(notify) Changed?.Invoke(this,EventArgs.Empty);
+        });
+    }
+    public void Invalidate()
+    {
+        lock(_changeGate)
+        {
+            if(_disposed) return;
+            Interlocked.Increment(ref _revision);
+            if(_suspended>0) { _pending=true; return; }
+        }
+        Changed?.Invoke(this,EventArgs.Empty);
+    }
     public AxisModel FindXAxis(string id)=>XAxes.FirstOrDefault(a=>a.Id==id)??throw new InvalidOperationException($"Unknown X axis '{id}'.");
     public AxisModel FindYAxis(string id)=>YAxes.FirstOrDefault(a=>a.Id==id)??throw new InvalidOperationException($"Unknown Y axis '{id}'.");
     public IReadOnlyList<string> Validate()
@@ -94,7 +137,7 @@ public sealed class ChartModel:ObservableObject,IDisposable
     {
         DoubleRange? result=null;
         void Add(DoubleRange? range) { if(range is { } r) result=result is { } old?old.Union(r):r; }
-        var stacks=StackCalculator.Calculate(this);
+        var stacks=StackCalculator.Capture(this);
         foreach(var s in RenderableSeries.Where(s=>s.IsVisible&&!s.IsCircular&&(x?s.XAxisId:s.YAxisId)==axis.Id))
         {
             if(s.HeatmapGrid is { } grid)
@@ -104,21 +147,12 @@ public sealed class ChartModel:ObservableObject,IDisposable
                 continue;
             }
             if(s.DataSeries is not { } data) continue;
-            var snapshot=data.Snapshot();
+            var snapshot=stacks.TryGetValue(s,out var captured)?captured.Snapshot:data.Snapshot();
             bool positive=axis.Scale==AxisScale.Logarithmic;
             if(x != s.IsHorizontal) { Add(snapshot.Extents(0,null,positive)); continue; }
             if(stacks.TryGetValue(s,out var stack))
             {
-                double lo=double.PositiveInfinity,hi=double.NegativeInfinity;
-                for(int i=0;i<snapshot.Count;i++)
-                {
-                    if(visibleX is { } vr&&!vr.Contains(snapshot[0,i])) continue;
-                    if(double.IsFinite(stack.Lower[i])&&(!positive||stack.Lower[i]>0)) lo=Math.Min(lo,stack.Lower[i]);
-                    if(double.IsFinite(stack.Upper[i])&&(!positive||stack.Upper[i]>0)) hi=Math.Max(hi,stack.Upper[i]);
-                    if(double.IsFinite(stack.Upper[i])&&(!positive||stack.Upper[i]>0)) lo=Math.Min(lo,stack.Upper[i]);
-                    if(double.IsFinite(stack.Lower[i])&&(!positive||stack.Lower[i]>0)) hi=Math.Max(hi,stack.Lower[i]);
-                }
-                if(double.IsFinite(lo)&&double.IsFinite(hi)) Add(DoubleRange.FromExtents(lo,hi));
+                Add(stack.GetRange(visibleX,positive));
                 continue;
             }
             int[] channels=s.Kind switch {SeriesKind.Candlestick or SeriesKind.Ohlc=>[2,3],SeriesKind.BoxPlot or SeriesKind.GroupedBoxPlot=>[1,5],SeriesKind.Band or SeriesKind.DigitalBand=>[1,2],SeriesKind.ErrorBars=>[2,3],_=>[s.YChannel]};
@@ -139,45 +173,11 @@ public sealed class ChartModel:ObservableObject,IDisposable
     }
     public void Dispose()
     {
-        if(_disposed) return; _disposed=true;
+        lock(_changeGate) { if(_disposed) return; _disposed=true; _pending=false; _suspended=0; }
+        StackCalculator.Release(this);
         XAxes.CollectionChanged-=OnCollectionChanged; YAxes.CollectionChanged-=OnCollectionChanged; RenderableSeries.CollectionChanged-=OnCollectionChanged; Annotations.CollectionChanged-=OnCollectionChanged;
         PropertyChanged-=OnObjectChanged;
         foreach(var item in _observed) item.PropertyChanged-=OnObjectChanged;
         _observed.Clear(); foreach(var s in RenderableSeries) s.Dispose();
-    }
-}
-
-public sealed record StackedValues(double[] Lower,double[] Upper);
-public static class StackCalculator
-{
-    public static Dictionary<RenderableSeries,StackedValues> Calculate(ChartModel model)
-    {
-        var result=new Dictionary<RenderableSeries,StackedValues>();
-        foreach(var group in model.RenderableSeries.Where(s=>s.IsVisible&&s.IsStacked&&s.DataSeries is not null).GroupBy(s=>(s.XAxisId,s.YAxisId,s.StackedGroupId,s.StackMode)))
-        {
-            var total=new Dictionary<double,(double Positive,double Negative)>();
-            foreach(var series in group)
-            {
-                var data=series.DataSeries!.Snapshot();
-                for(int i=0;i<data.Count;i++) { double x=data[0,i],y=data[1,i]; if(!double.IsFinite(y)) continue; var v=total.GetValueOrDefault(x); total[x]=y>=0?(v.Positive+y,v.Negative):(v.Positive,v.Negative-y); }
-            }
-            var running=new Dictionary<double,(double Positive,double Negative)>();
-            foreach(var series in group)
-            {
-                var data=series.DataSeries!.Snapshot(); var lower=new double[data.Count]; var upper=new double[data.Count];
-                for(int i=0;i<data.Count;i++)
-                {
-                    double x=data[0,i],y=data[1,i];
-                    if(!double.IsFinite(y)) { lower[i]=upper[i]=double.NaN; continue; }
-                    var accumulated=running.GetValueOrDefault(x);
-                    if(series.StackMode==StackMode.Percent) { var t=total[x]; double divisor=y>=0?t.Positive:t.Negative; y=divisor>0?100*y/divisor:0; }
-                    lower[i]=y>=0?accumulated.Positive:accumulated.Negative;
-                    upper[i]=lower[i]+y;
-                    running[x]=y>=0?(upper[i],accumulated.Negative):(accumulated.Positive,upper[i]);
-                }
-                result[series]=new(lower,upper);
-            }
-        }
-        return result;
     }
 }

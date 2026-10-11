@@ -7,7 +7,7 @@ namespace ChartScene.Rendering;
 
 public sealed partial class ChartRenderer
 {
-    private void DrawSeries(IChartCanvas c,ChartModel model,RenderableSeries series,ChartLayout layout,StackedValues? stack)
+    private void DrawSeries(IChartCanvas c,ChartModel model,RenderableSeries series,ChartLayout layout,StackedSeriesValues? stack)
     {
         var projection=layout.Projection(model,series);
         if(series.Kind is SeriesKind.Heatmap or SeriesKind.Contour)
@@ -16,7 +16,7 @@ public sealed partial class ChartRenderer
             return;
         }
         if(series.DataSeries is not { } source) return;
-        var data=source.Snapshot(); if(data.Count==0) return;
+        var data=stack?.Snapshot??source.Snapshot(); if(data.Count==0) return;
         if(series.IsCircular) { DrawPie(c,model,series,data,layout.PlotArea); return; }
         int[] indices=VisibleIndices(model,series,data,projection);
         if(indices.Length==0) return;
@@ -48,7 +48,7 @@ public sealed partial class ChartRenderer
         var(start,end)=data.VisibleIndices(p.XAxis.VisibleRange);
         return Enumerable.Range(start,end-start).ToArray();
     }
-    private void DrawContinuous(IChartCanvas c,ChartModel model,RenderableSeries s,SeriesSnapshot d,int[] indices,SeriesProjection p,StackedValues? stack)
+    private void DrawContinuous(IChartCanvas c,ChartModel model,RenderableSeries s,SeriesSnapshot d,int[] indices,SeriesProjection p,StackedSeriesValues? stack)
     {
         bool digital=s.Kind==SeriesKind.DigitalLine;
         bool spline=s.Kind is SeriesKind.Spline or SeriesKind.SplineMountain;
@@ -161,7 +161,7 @@ public sealed partial class ChartRenderer
             if(point.IsFinite&&p.Plot.Contains(point)) c.DrawEllipse(new(point.X-s.MarkerSize/2-3,point.Y-s.MarkerSize/2-3,s.MarkerSize+6,s.MarkerSize+6),null,new(ColorRgba.White,2));
         }
     }
-    private void DrawDiscrete(IChartCanvas c,ChartModel model,RenderableSeries s,SeriesSnapshot d,int[] indices,SeriesProjection p,StackedValues? stack)
+    private void DrawDiscrete(IChartCanvas c,ChartModel model,RenderableSeries s,SeriesSnapshot d,int[] indices,SeriesProjection p,StackedSeriesValues? stack)
     {
         bool IsColumn(RenderableSeries t)=>t.Kind is SeriesKind.Column or SeriesKind.Bar or SeriesKind.StackedColumn or SeriesKind.StackedBar;
         var peers=model.RenderableSeries.Where(t=>t.IsVisible&&t.XAxisId==s.XAxisId&&t.YAxisId==s.YAxisId&&t.IsHorizontal==s.IsHorizontal&&((s.Kind==SeriesKind.GroupedBoxPlot&&t.Kind==s.Kind)||(IsColumn(s)&&IsColumn(t)))).ToArray();
@@ -338,7 +338,7 @@ public sealed partial class ChartRenderer
             c.DrawText(s.SeriesName,new(plot.Center.X,plot.Center.Y+23),new(model.Theme.Muted,11),TextAlignment.Center);
         }
     }
-    private static void DrawDataLabels(IChartCanvas c,ChartModel model,RenderableSeries s,SeriesSnapshot d,int[] indices,SeriesProjection p,StackedValues? stack)
+    private static void DrawDataLabels(IChartCanvas c,ChartModel model,RenderableSeries s,SeriesSnapshot d,int[] indices,SeriesProjection p,StackedSeriesValues? stack)
     {
         var occupied=new List<RectD>(); var provider=s.DataLabelProvider??new NumericDataLabelProvider();
         foreach(int i in indices)
