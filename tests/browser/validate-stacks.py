@@ -62,16 +62,33 @@ with sync_playwright() as p:
             assert consecutive>=2, samples
         test('stacked data visible geometry', pixels)
         def chrome_pixels(theme):
-            path=out/('stacked-chrome-'+theme.lower()+'.png'); page.screenshot(path=str(path))
-            with Image.open(path) as image:
-                gray=image.convert('L')
-                for name in ['mode','edit','replace','visibility','theme','fit','status']:
-                    b=state()['controls'][name]
-                    crop=gray.crop((int(b['x']+4),int(b['y']+3),int(b['x']+b['width']-4),int(b['y']+b['height']-3)))
-                    lo,hi=crop.getextrema()
-                    assert hi-lo>60, (theme,name,'control has no readable text contrast',lo,hi)
-                    if theme=='Dark': assert lo<80 and hi>100, (theme,name,lo,hi)
-                    else: assert lo<180 and hi>220, (theme,name,lo,hi)
+            # Model readiness and a chart callback precede native control-state presentation.
+            # Preserve every contrast threshold, and observe two passing screenshots without
+            # repeating a click, disabling animations, modifying styles or forcing a redraw.
+            path=out/('stacked-chrome-'+theme.lower()+'.png')
+            observations=[]; consecutive=0; started=time.perf_counter()
+            while True:
+                current=state()
+                assert current['theme']==theme and not current.get('error'),current
+                page.screenshot(path=str(path))
+                readings={}; failures=[]
+                with Image.open(path) as image:
+                    gray=image.convert('L')
+                    for name in ['mode','edit','replace','visibility','theme','fit','status']:
+                        b=current['controls'][name]
+                        crop=gray.crop((int(b['x']+4),int(b['y']+3),min(gray.width,int(b['x']+b['width']-4)),min(gray.height,int(b['y']+b['height']-3))))
+                        lo,hi=crop.getextrema()
+                        readings[name]={'min':lo,'max':hi}
+                        if not (hi-lo>60 and (lo<80 and hi>100 if theme=='Dark' else lo<180 and hi>220)):
+                            failures.append(name)
+                observations.append({'elapsedMs':(time.perf_counter()-started)*1000,'controls':readings,'failing':failures})
+                consecutive=consecutive+1 if not failures else 0
+                if consecutive>=2 or time.perf_counter()-started>8: break
+                page.wait_for_timeout(100)
+            evidence=out/('stacked-chrome-'+theme.lower()+'-observations.json')
+            prior=json.loads(evidence.read_text()) if evidence.exists() else []
+            prior.append(observations);evidence.write_text(json.dumps(prior,indent=2))
+            assert consecutive>=2,(theme,observations)
         test('stacked dark toolbar and status remain visible', lambda: chrome_pixels('Dark'))
         def rollover():
             before = state()

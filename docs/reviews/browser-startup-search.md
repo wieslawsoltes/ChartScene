@@ -1,32 +1,112 @@
 # Browser startup and repeated-search review
 
-## Cold-start frame scheduling
+## Evidence and root cause
 
-The preserved PR #5 run at `44661969b76c3ac558214b0d6d83096a2a8b9c01` contained a genuine no-input presentation failure. Managed stacked-chart diagnostics reported a valid frame, while repeated plot screenshots were uniformly RGB(243,243,243). Pointer input subsequently made both toolbar and chart visible. Waiting longer or accepting managed `ready` is not a rendering fix.
+The preserved PR #5 build at `44661969b76c3ac558214b0d6d83096a2a8b9c01`
+could report valid managed chart frames while a full-window persistent Uno loader
+covered the canvas. A separate no-input probe (run `38172515062`, artifact
+`11714486754`) observed the loader remaining in three of four independent starts.
+Managed `ready`, a longer delay, or counting the loader's colored progress bar is
+not proof of a presented chart.
 
-A separate no-input probe of that exact saved binary (run `38172515062`, artifact `11714486754`) observed the full-window `#loading.uno-persistent-loader` above the canvas in three of four independent starts. The fourth dismissed it without input. This distinguishes a reproducible scheduling race from a missing chart or toolbar implementation.
+The first adapter at `a4085433` briefly added/removed `CompositionTarget.Rendering`
+after awaiting fonts. That was insufficient: the full `c4acc7b2` check in run
+`38174038657` passed 160/163 browser checks, but the linked cold start and the
+stacked cold start with a 250 ms font delay retained the loader. The third failure
+was a separate transient toolbar-state capture described below. The previous
+one-frame approach is superseded, not claimed fixed.
 
-Pinned Uno 6.7.135 calls the browser wrapper's `RequestRender` after font preloading. That requests presentation without setting the composition target's full-frame recording state. The upstream correction replaces it with `ICompositionTarget.RequestNewFrame`:
+In pinned Uno 6.7.135, `ShowCore` awaits `Application.FontPreloadTask` through a
+separate continuation, dispatches `InvalidateArrange`, and then installs its
+`FrameRendered` listener from a `LayoutUpdated` handler. Font task completion
+alone therefore does not establish that the listener exists. The host then calls
+`IXamlRootHost.InvalidateRender`, which can present an already-recorded frame
+without another record pass. Upstream #24260 changes that call to
+`ICompositionTarget.RequestNewFrame` at the exact post-layout point.
+
+Primary host sources:
 
 - https://github.com/unoplatform/uno/pull/24260
 - https://github.com/unoplatform/uno/issues/23586
 - https://github.com/unoplatform/uno/blob/6.7.135/src/Uno.UI.Runtime.Skia.WebAssembly.Browser/UI/Xaml/Window/WebAssemblyWindowWrapper.cs
 - https://github.com/unoplatform/uno/blob/6.7.135/src/Uno.UI/UI/Xaml/Media/CompositionTarget.Rendering.skia.cs
 
-`UnoBrowserStartup.RequestInitialFrameAsync` is a version-qualified compatibility adapter, not an independently claimed replacement compositor. It waits for the exact typed internal `Application.FontPreloadTask` getter using a trimming-compatible `UnsafeAccessor`, then uses the pinned public `CompositionTarget.Rendering` event's initial subscription behavior to enqueue `RequestNewFrame`. The handler is removed immediately: the queued frame remains, with no timer, continuous animation handler, artificial pointer event, DOM splash removal, or chart data/style mutation. An existing Rendering subscriber already schedules complete frames. Detached roots are ignored, dispatcher failures and missing runtime contracts are reported. The application invokes this once after its root loads.
+## Scoped startup hand-off
 
-Requalify/remove this adapter when changing Uno. Desktop is a no-op. Browser publish and package-only builds, plus actual cold-start execution, must validate the getter binding and composition behavior; source inspection alone is insufficient.
+`UnoBrowserStartup.EnsureInitialPresentationAsync` is a **version-qualified
+compatibility adapter**, not a patched Uno compositor or a permanent animation
+loop. It awaits the typed internal font-preload getter, then temporarily retains
+the public `CompositionTarget.Rendering` subscription until Uno removes its own
+persistent loader after its post-layout record callback. This keeps full-frame
+recording active across the native listener-registration race.
 
-The no-input startup suite opens every gallery in a fresh context and additionally delays real font downloads by 250 and 700 milliseconds for the stacked gallery. It requires Uno itself to remove the persistent loader before evaluating consecutive visible-pixel screenshots; the loader's colored progress bar cannot satisfy a chart assertion. It verifies a single startup request and that the static stacked view settles rather than continuously redrawing. Existing per-gallery geometry, pixel and input tests remain separate gates.
+The adapter only **reads** loader existence. It never hides/removes the loader,
+changes chart data/styles, synthesizes input, or replaces the host's completion
+callback. It handles an already-released loader without subscribing. Unload,
+exceptions and a 30-second hand-off deadline all unsubscribe and stop the
+deadline timer; that timer is only a cleanup guard and never paints or requests
+a frame. Font waiting has a separate two-minute bound before any rendering
+subscription is attached. Desktop is a no-op.
+
+One startup **session** may observe multiple composition callbacks. Diagnostics
+report `sessions`, `compositionCallbacks`, `active` and `detached`; they do not
+call a session one frame or label a managed callback as physical presentation.
+Actual visible pixels remain a separate browser assertion. Requalify/remove this
+adapter when upgrading Uno. Background-tab, timeout and physical-device behavior
+are not certified by the foreground Chromium fixtures.
+
+The startup suite repeats all six galleries and both delayed-font fixtures in
+three independent fresh browser contexts each: **24 no-input cases**. The
+250/700 ms cases must intercept actual font files. Every case requires native
+loader dismissal and two consecutive screenshots meeting the unchanged pixel
+threshold. Static stacked pages must settle without continuous chart redraw.
+Existing gallery geometry, interaction, data, export and package-consumer gates
+remain separate requirements.
+
+## Theme presentation observation
+
+The `c4acc7b2` run captured the middle-series and Fit buttons during a transient
+state on returning from Light to Dark. Its subsequent preserved failure
+screenshot already had the normal dark controls. Chart-model readiness and a
+chart render callback do not fence the native controls' visual-state transition.
+
+`chrome_pixels` now records each control's contrast in successive **real
+screenshots**, requiring two consecutive observations that satisfy every
+original light/dark threshold. It retains intermediate failures and elapsed time
+in JSON, clips samples to the actual image bounds (no off-screen padding), and
+fails if the controls do not settle within eight seconds. It does not click
+again, disable animations, force a redraw, change application colors, or lower
+any readability threshold.
 
 ## Repeated search activation and allocation
 
-Selecting a result hides the navigation pane. Assigning the same query does not raise TextChanged, so the old page could leave retained results inaccessible. Search focus, pointer activation and Ctrl+F now explicitly reveal existing results. Immutable result identity still skips rebuilding row controls, and ItemClick handles reactivation of an already-current example without constructing another model.
+Selecting a result hides navigation. Assigning identical text does not raise
+`TextChanged`; search focus, pointer activation and Ctrl+F explicitly reveal the
+retained results. Immutable result identity still skips row reconstruction, and
+`ItemClick` handles reactivation of a current example without recreating its
+model.
 
-`ExampleSearchIndex` validates the 4096-character bound before examining whitespace or touching cache state. Oversized whitespace can no longer bypass the bound. A last-input value comparison under the same cache lock avoids normalization and scanning for identical queries. The existing sixteen-result cache, all-term substring behavior, order and read-only result contract are retained.
+`ExampleSearchIndex` validates the 4096-character bound before whitespace
+normalization or cache mutation. Oversized whitespace cannot bypass the bound.
+A last-input value comparison under the cache lock bypasses normalization and
+scanning for identical queries; the sixteen-result cache, all-term substring
+behavior, catalogue order and read-only result contract remain intact.
 
-The core fixture reports 10,000 warmed identical queries separately from initial construction/normalization. It requires zero additional examined entries, the same result reference and zero measured managed allocations. `artifacts/performance/example-search.json` records elapsed CPU time as evidence, not a timing threshold or GPU/FPS claim. Tests also cover value-equal distinct strings, null/empty transitions, eviction, concurrent readers, and rejection without altering valid cache state.
+The core fixture reports 10,000 warmed identical queries separately from initial
+construction and normalization. It requires zero additional examined entries,
+one retained result identity and zero measured managed allocations. The report
+at `artifacts/performance/example-search.json` records CPU timing as evidence,
+not a timing threshold, UI-latency result or GPU/FPS claim. Regression cases cover
+distinct value-equal strings, empty/null transitions, eviction, concurrent
+readers and rejection without altering a valid cache generation.
 
-Temporary workflows used to inspect preserved failures and repair one exact header-parent statement were removed after execution. Evidence remains on `review/pr5-446619-layout-evidence`, not in release packages. The original dispatch-only diagnostics workflow remains available.
+## Scope
 
-This review does not establish complete SciChart WPF API/pixel parity or physical-GPU performance. All examples, native GL/GLES, browser builds and isolated package-consumer gates remain required.
+Temporary diagnostic/repair workflows were removed after use. The original
+saved evidence remains on `review/pr5-446619-layout-evidence`, not in packages.
+Current CI also retains per-attempt startup screenshots and theme observations.
+
+Full SciChart WPF API/pixel parity, physical-GPU benchmarks, complete
+accessibility and cross-platform device-loss qualification remain outstanding.
+See `parity-status.md` for the capability inventory. Successful packaging means
+CI artifacts and isolated consumer builds, not publication to NuGet.org.
