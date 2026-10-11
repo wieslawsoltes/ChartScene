@@ -7,7 +7,9 @@ using SkiaSharp.HarfBuzz;
 
 namespace ChartScene.Rendering.Skia;
 
-/// <summary>View-owned cache. Pruning happens only between frames, so no live draw resources are disposed.</summary>
+public readonly record struct SkiaCacheStatistics(int Fonts,int TextBlobs,int Images,int Fills,int Strokes);
+
+/// <summary>View-owned cache. Pruning occurs between frames, never while a drawing call holds a resource.</summary>
 public sealed class SkiaResources:IDisposable
 {
     internal sealed record FontEntry(SKTypeface Typeface,SKFont Font,SKShaper Shaper,bool OwnsTypeface):IDisposable
@@ -19,27 +21,35 @@ public sealed class SkiaResources:IDisposable
     private readonly Dictionary<(string,string,double,bool),TextEntry> _text=[];
     private readonly Dictionary<RasterImage,SKImage> _images=[];
     private bool _disposed;
+    public SkiaCacheStatistics CacheStatistics=>new(_fonts.Count,_text.Count,_images.Count,_fills.Count,_strokes.Count);
     public void BeginFrame()
     {
-        ObjectDisposedException.ThrowIf(_disposed,this);
+        Check();
         if(_fills.Count>512) Clear(_fills);
         if(_strokes.Count>512) Clear(_strokes);
-        if(_text.Count>2048) Clear(_text);
+        // Text blobs are cleared before their font/shaper entries. Variable-size labels cannot
+        // retain an unbounded sequence of native fonts over the lifetime of an animated view.
+        if(_fonts.Count>64) { Clear(_text); Clear(_fonts); }
+        else if(_text.Count>2048) Clear(_text);
         if(_images.Count>16) Clear(_images);
     }
+    private void Check()=>ObjectDisposedException.ThrowIf(_disposed,this);
     internal SKPaint Fill(ColorRgba color)
     {
+        Check();
         if(!_fills.TryGetValue(color,out var paint)) _fills[color]=paint=new(){Color=Color(color),IsAntialias=true,Style=SKPaintStyle.Fill};
         return paint;
     }
     internal SKPaint Stroke(StrokeStyle style,SKStrokeCap cap=SKStrokeCap.Butt)
     {
+        Check();
+        if(!float.IsFinite((float)style.Width)||style.Width<=0) throw new ArgumentOutOfRangeException(nameof(style),"Stroke width must be finite and positive.");
         string dash=style.Dash is {Length:>0}?string.Join(",",style.Dash.Select(v=>v.ToString("R",System.Globalization.CultureInfo.InvariantCulture))):"";
         var key=(style.Color,style.Width,dash,cap);
         if(!_strokes.TryGetValue(key,out var paint))
         {
             paint=new(){Color=Color(style.Color),IsAntialias=true,Style=SKPaintStyle.Stroke,StrokeWidth=(float)style.Width,StrokeCap=cap,StrokeJoin=SKStrokeJoin.Round};
-            if(style.Dash is {Length:>0} values&&values.All(v=>double.IsFinite(v)&&v>0))
+            if(style.Dash is {Length:>0} values&&values.All(v=>float.IsFinite((float)v)&&v>0))
             {
                 float[] intervals=values.Length%2==0?values.Select(v=>(float)v).ToArray():values.Concat(values).Select(v=>(float)v).ToArray();
                 using var effect=SKPathEffect.CreateDash(intervals,0); paint.PathEffect=effect;
@@ -50,6 +60,8 @@ public sealed class SkiaResources:IDisposable
     }
     internal FontEntry Font(TextStyle style)
     {
+        Check();
+        if(!float.IsFinite((float)style.Size)||style.Size<=0) throw new ArgumentOutOfRangeException(nameof(style),"Font size must be finite and positive.");
         var key=(style.Family,style.Size,style.Bold);
         if(!_fonts.TryGetValue(key,out var result))
         {
@@ -62,6 +74,7 @@ public sealed class SkiaResources:IDisposable
     }
     internal TextEntry Text(string text,TextStyle style)
     {
+        Check();
         var key=(text,style.Family,style.Size,style.Bold);
         if(_text.TryGetValue(key,out var cached)) return cached;
         var entry=Font(style); var metrics=entry.Font.Metrics;
@@ -83,6 +96,7 @@ public sealed class SkiaResources:IDisposable
     }
     internal SKImage Image(RasterImage image)
     {
+        Check(); ArgumentNullException.ThrowIfNull(image);
         if(_images.TryGetValue(image,out var cached)) return cached;
         using var bitmap=new SKBitmap(new SKImageInfo(image.Width,image.Height,SKColorType.Rgba8888,SKAlphaType.Unpremul));
         Marshal.Copy(image.Pixels.ToArray(),0,bitmap.GetPixels(),image.Pixels.Length);
@@ -174,18 +188,27 @@ public sealed class SkiaChartCanvas(SKCanvas canvas,SkiaResources resources):ICh
     }
     public void DrawImage(RasterImage image,RectD destination,bool flipX=false,bool flipY=false,bool interpolate=false)
     {
+        var native=resources.Image(image);
         canvas.Save();
-        canvas.Translate((float)destination.Center.X,(float)destination.Center.Y); canvas.Scale(flipX?-1:1,flipY?-1:1);
-        var rect=new SKRect((float)(-destination.Width/2),(float)(-destination.Height/2),(float)(destination.Width/2),(float)(destination.Height/2));
-        canvas.DrawImage(resources.Image(image),rect,new SKSamplingOptions(interpolate?SKFilterMode.Linear:SKFilterMode.Nearest,SKMipmapMode.None));
-        canvas.Restore();
+        try
+        {
+            canvas.Translate((float)destination.Center.X,(float)destination.Center.Y); canvas.Scale(flipX?-1:1,flipY?-1:1);
+            var rect=new SKRect((float)(-destination.Width/2),(float)(-destination.Height/2),(float)(destination.Width/2),(float)(destination.Height/2));
+            canvas.DrawImage(native,rect,new SKSamplingOptions(interpolate?SKFilterMode.Linear:SKFilterMode.Nearest,SKMipmapMode.None));
+        }
+        finally { canvas.Restore(); }
     }
     public void DrawText(string text,PointD baseline,TextStyle style,TextAlignment alignment=TextAlignment.Left,double rotationDegrees=0)
     {
         if(string.IsNullOrEmpty(text)||!baseline.IsFinite) return;
         var shaped=resources.Text(text,style); double offset=alignment==TextAlignment.Center?-shaped.Metrics.Width/2:alignment==TextAlignment.Right?-shaped.Metrics.Width:0;
-        canvas.Save(); canvas.Translate((float)baseline.X,(float)baseline.Y); if(rotationDegrees!=0) canvas.RotateDegrees((float)rotationDegrees);
-        canvas.DrawText(shaped.Blob,(float)offset,0,resources.Fill(style.Color)); canvas.Restore();
+        canvas.Save();
+        try
+        {
+            canvas.Translate((float)baseline.X,(float)baseline.Y); if(rotationDegrees!=0) canvas.RotateDegrees((float)rotationDegrees);
+            canvas.DrawText(shaped.Blob,(float)offset,0,resources.Fill(style.Color));
+        }
+        finally { canvas.Restore(); }
     }
     public TextMetrics MeasureText(string text,TextStyle style)=>string.IsNullOrEmpty(text)?new(0,style.Size,style.Size*.8,style.Size*.2):resources.Text(text,style).Metrics;
 }
