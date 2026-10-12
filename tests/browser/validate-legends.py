@@ -35,7 +35,16 @@ with sync_playwright() as p:
     def visible(identifier, value):
         page.wait_for_function('p=>window.chartSceneLegends.series.find(s=>s.id===p.id)?.visible===p.value&&window.chartSceneLegends.ready',arg={'id':identifier,'value':value})
     def toggle(identifier):
-        old = entries()[identifier]['visible']; b = entries()[identifier]['checkbox']; assert b, entries()[identifier]
+        # Model readiness can precede reattachment/layout of retained native rows.
+        # Observe the actual checkbox bounds before issuing one input action; never
+        # force layout or click an old rectangle from a filtered-out generation.
+        page.wait_for_function("""id => {
+            const s = window.chartSceneLegends;
+            if (s?.error) throw new Error(s.error);
+            const row = s?.entries.find(e => e.id === id);
+            return s?.ready && row?.checkbox?.width > 0 && row.checkbox.height > 0;
+        }""", arg=identifier)
+        row = entries()[identifier]; old = row['visible']; b = row['checkbox']
         inputs.click('legends-legend', b, resolve=lambda: entries().get(identifier, {}).get('checkbox'))
         visible(identifier, not old)
     def module(name):
@@ -153,14 +162,19 @@ with sync_playwright() as p:
             assert after['membershipPasses']==snapshot['membershipPasses']
         test('replacement model detaches live old-model notifications',replacement)
         def empty():
-            command('filter');assert state()['filter']=='Visible'
-            for identifier in list(entries()):toggle(identifier)
-            assert state()['entries']==[] and state()['ready']
-            command('filter');command('filter');assert len(entries())==4
-            for identifier in list(entries()):toggle(identifier)
+            before = identities(); created = state()['rowsCreated']
+            for cycle in range(3):
+                command('filter');assert state()['filter']=='Visible'
+                for identifier in list(entries()):toggle(identifier)
+                assert state()['entries']==[] and state()['ready']
+                command('filter');command('filter');assert len(entries())==4
+                for identifier in list(entries()):toggle(identifier)
+                assert all(e['visible'] for e in state()['entries'])
+                assert identities()==before and state()['rowsCreated']==created
         test('empty filtered legends remain valid and recover',empty)
         def reattach():
-            before=state();module('linked');module('legends');ready();after=state()
+            before=state(); assert all(e['visible'] for e in before['entries'])
+            module('linked');module('legends');ready();after=state()
             assert after['generation']==before['generation'] and after['series']==before['series']
             toggle('sine');command('undo');visible('sine',True)
         test('legend unload reload restores bindings and history',reattach)
