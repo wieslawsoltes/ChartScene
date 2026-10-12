@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using ChartScene.Charting;
 using ChartScene.Core;
@@ -94,17 +95,50 @@ public static class CursorLayoutTests
             using var source = new View(); using var target = new View(); using var group = new ChartCursorSyncGroup("warm");
             group.Add(source.Controller); group.Add(target.Controller); source.Move();
             int events = 0; source.Controller.ViewChanged += (_, _) => events++; target.Controller.ViewChanged += (_, _) => events++;
-            for (int i = 0; i < 100; i++) group.Refresh();
-            long start = Stopwatch.GetTimestamp(), before = GC.GetAllocatedBytesForCurrentThread();
-            for (int i = 0; i < 10000; i++) group.Refresh();
-            long bytes = GC.GetAllocatedBytesForCurrentThread() - before;
-            var result = new { refreshes = 10000, allocatedBytes = bytes, notifications = events,
-                milliseconds = Stopwatch.GetElapsedTime(start).TotalMilliseconds,
-                scope = "Warm unchanged cursor synchronization only, excluding input hit tests, rendering and presentation." };
-            TestSuite.Equal(bytes, 0L); TestSuite.Equal(events, 0);
+            Action refresh = group.Refresh;
+            // Separate the first invocation/setup from warmed measurements. Compile the
+            // measurement helper outside the interval and use that same helper to warm it.
+            // Do not change production JIT settings or accept a best-of-N measurement.
+            var warmup = Measure(refresh, 10000);
+            var windows = new Measurement[3];
+            for (int i = 0; i < windows.Length; i++) windows[i] = Measure(refresh, 10000);
+            var result = new { refreshesPerWindow = 10000, warmup, windows, notifications = events,
+                scope = "Warm unchanged cursor synchronization in a precompiled non-tiered test helper. Every measured window must allocate zero bytes. Warmup is reported separately; no timing threshold, GPU or presentation claim." };
+            // Preserve evidence BEFORE assertions, including all failed windows.
             Directory.CreateDirectory("artifacts/performance");
             File.WriteAllText("artifacts/performance/cursor-layout.json", JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
             Console.WriteLine("PERF_CURSOR_LAYOUT " + JsonSerializer.Serialize(result));
+            for (int i = 0; i < windows.Length; i++)
+                if (windows[i].AllocatedBytes != 0) throw new Exception($"Warm cursor window {i}: expected zero managed bytes, got {windows[i].AllocatedBytes}.");
+            TestSuite.Equal(events, 0);
+        });
+        suite.Run("cursor allocation probe detects intentional per-call allocations", () =>
+        {
+            Action allocate = AllocateSentinel;
+            try
+            {
+                _ = Measure(allocate, 100);
+                var measured = Measure(allocate, 1000);
+                TestSuite.True(measured.AllocatedBytes >= 64000);
+            }
+            finally { _sentinel = null; }
         });
     }
+
+    private readonly record struct Measurement(long AllocatedBytes, long ElapsedTicks);
+    // Fixture only: prevents this measurement loop from transitioning tiers inside its own
+    // interval. The chart library and application keep their normal compilation behavior.
+    // https://learn.microsoft.com/dotnet/api/system.runtime.compilerservices.methodimploptions
+    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.AggressiveOptimization)]
+    private static Measurement Measure(Action operation, int iterations)
+    {
+        long start = Stopwatch.GetTimestamp();
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < iterations; i++) operation();
+        long bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+        return new(bytes, Stopwatch.GetTimestamp() - start);
+    }
+    private static object? _sentinel;
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void AllocateSentinel() => _sentinel = new byte[64];
 }
