@@ -12,7 +12,7 @@ public sealed partial class ChartRenderer
     private readonly List<HitRegion> _hits=[];
     private readonly List<LegendItem> _legend=[];
     private readonly Dictionary<(HeatmapGrid Grid,ColorMap Map,DoubleRange Range,HeatmapColorScaleMode Mode,double Opacity),RasterImage> _rasterCache=[];
-    public ChartFrame Render(IChartCanvas target,ChartModel model,double width,double height,ChartViewState? view=null)
+    public ChartFrame Render(IChartCanvas target,ChartModel model,double width,double height,ChartViewState? view=null,PlotMargins minimumMargins=default)
     {
         BeginResamplingFrame();
         var timer=Stopwatch.StartNew(); var canvas=new CountingCanvas(target); _renderedPoints=0; _hits.Clear(); _legend.Clear();
@@ -25,10 +25,11 @@ public sealed partial class ChartRenderer
             return new(new(new(0,0,width,height),new(0,0,0,0),[]),new(0,0,canvas.Commands,timer.Elapsed.TotalMilliseconds,model.Revision),[],[],errors);
         }
         model.AutoRangeAxes();
-        var layout=ChartLayout.Measure(canvas,model,width,height);
+        var layout=ChartLayout.Measure(canvas,model,width,height,minimumMargins);
         if(layout.PlotArea.IsEmpty) return new(layout,new(0,0,canvas.Commands,timer.Elapsed.TotalMilliseconds,model.Revision),[],[],[]);
         model.ApplyAspectRatio(layout.PlotArea.Width,layout.PlotArea.Height);
-        layout=ChartLayout.Measure(canvas,model,width,height);
+        layout=ChartLayout.Measure(canvas,model,width,height,minimumMargins);
+        if(layout.PlotArea.IsEmpty) return new(layout,new(0,0,canvas.Commands,timer.Elapsed.TotalMilliseconds,model.Revision),[],[],[]);
         DrawBackground(canvas,model,layout);
         DrawAnnotations(canvas,model,layout,AnnotationLayer.BelowSeries);
         var stacks=StackCalculator.Capture(model);

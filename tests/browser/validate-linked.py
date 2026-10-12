@@ -8,6 +8,7 @@ import traceback
 from PIL import Image
 from playwright.sync_api import sync_playwright
 from uno_input import UnoInput
+from alignment_checks import validate_alignment
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--url', default='http://127.0.0.1:8765/ChartScene/')
@@ -46,6 +47,7 @@ with sync_playwright() as playwright:
             print('FAIL', name, str(error), flush=True)
             page.screenshot(path=str(out/(name.replace(' ', '-')+'-failure.png')))
             (out/'failure-state.json').write_text(json.dumps(state(), indent=2))
+            (out/'failure-alignment.json').write_text(json.dumps(page.evaluate('window.chartSceneAlignment || {}'),indent=2))
         finally:
             (out/'results.json').write_text(json.dumps({'total':len(results), 'failed':sum(not r['passed'] for r in results), 'tests':results}, indent=2))
             (out/'console.json').write_text(json.dumps(logs, indent=2))
@@ -113,6 +115,7 @@ with sync_playwright() as playwright:
             ready(); page.wait_for_function('old=>window.chartSceneLinked.upper.frames>old', arg=old)
             move('lower', .65); linked_cursors(); linked_ranges()
         test('linked group detaches and reattaches', reattach)
+        validate_alignment(page,state,click,move,linked_cursors,test,out)
         def errors(): assert not [entry for entry in logs if entry['type']=='pageerror'], logs
         test('linked page has no unhandled errors', errors)
         (out/'final-state.json').write_text(json.dumps(state(), indent=2))

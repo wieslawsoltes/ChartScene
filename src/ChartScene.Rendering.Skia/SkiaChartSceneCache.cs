@@ -24,6 +24,7 @@ public sealed class SkiaChartSceneCache : IDisposable
     private string[] _seriesIds = [];
     private long _revision = -1, _builds, _replays;
     private double _width, _height;
+    private PlotMargins _minimumMargins;
     private bool _disposed, _lastHit;
     public SceneCacheStatistics Statistics => new(_builds, _replays, _lastHit);
 
@@ -32,7 +33,7 @@ public sealed class SkiaChartSceneCache : IDisposable
     /// Data, styles, axes, annotations, theme, model identity and size invalidate recording.
     /// User providers may have unobservable state, so they deliberately bypass this cache.
     /// </summary>
-    public ChartFrame Render(SKCanvas canvas, ChartModel model, double width, double height, ChartViewState? view = null)
+    public ChartFrame Render(SKCanvas canvas, ChartModel model, double width, double height, ChartViewState? view = null, PlotMargins minimumMargins = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(canvas); ArgumentNullException.ThrowIfNull(model);
@@ -42,7 +43,7 @@ public sealed class SkiaChartSceneCache : IDisposable
         _resources.BeginFrame();
         bool eligible = CanCache(model);
         _lastHit = eligible && _picture is not null && _frame is not null && ReferenceEquals(_model, model)
-            && _revision == model.Revision && _width == width && _height == height && ConfigurationMatches(model);
+            && _revision == model.Revision && _width == width && _height == height && _minimumMargins == minimumMargins && ConfigurationMatches(model);
         SKPicture? transient = null;
         try
         {
@@ -58,7 +59,7 @@ public sealed class SkiaChartSceneCache : IDisposable
                 long revision = model.Revision;
                 using var recorder = new SKPictureRecorder();
                 var recording = recorder.BeginRecording(new(0, 0, (float)width, (float)height));
-                frame = _renderer.Render(new SkiaChartCanvas(recording, _resources), model, width, height);
+                frame = _renderer.Render(new SkiaChartCanvas(recording, _resources), model, width, height, minimumMargins: minimumMargins);
                 picture = recorder.EndRecording(); transient = picture; _builds++;
                 ClearRecording();
                 // One retained picture at most. Very large command/point sets bypass retention;
@@ -67,7 +68,7 @@ public sealed class SkiaChartSceneCache : IDisposable
                     && frame.Statistics.DrawingCommands <= 100000 && frame.Statistics.RenderedPoints <= 1000000)
                 {
                     _picture = picture; transient = null; _frame = frame; _model = model;
-                    _revision = revision; _width = width; _height = height;
+                    _revision = revision; _width = width; _height = height; _minimumMargins = minimumMargins;
                     _palette = model.Theme.Palette.ToArray();
                     _seriesIds = model.RenderableSeries.Select(s => s.Id).ToArray();
                 }

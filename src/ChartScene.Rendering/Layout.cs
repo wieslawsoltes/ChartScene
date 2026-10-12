@@ -24,19 +24,22 @@ public sealed class ChartLayout
     public RectD PlotArea { get; }
     public IReadOnlyList<AxisLayout> Axes { get; }
     public double HeaderHeight { get; }
-    public ChartLayout(RectD bounds,RectD plot,IReadOnlyList<AxisLayout> axes,double headerHeight=0)
-    { Bounds=bounds; PlotArea=plot; Axes=axes; HeaderHeight=headerHeight; }
+    public PlotMargins NaturalMargins { get; }
+    public ChartLayout(RectD bounds,RectD plot,IReadOnlyList<AxisLayout> axes,double headerHeight=0,PlotMargins naturalMargins=default)
+    { Bounds=bounds; PlotArea=plot; Axes=axes; HeaderHeight=headerHeight; NaturalMargins=naturalMargins; }
     public SeriesProjection Projection(ChartModel model,RenderableSeries series)=>new(model,series,PlotArea);
-    public static ChartLayout Measure(IChartCanvas canvas,ChartModel model,double width,double height)
+    public static ChartLayout Measure(IChartCanvas canvas,ChartModel model,double width,double height,PlotMargins minimumMargins=default)
     {
+        if(!double.IsFinite(width)||!double.IsFinite(height)||width<0||height<0) throw new ArgumentOutOfRangeException(nameof(width));
         var bounds=new RectD(0,0,Math.Max(0,width),Math.Max(0,height));
         if(width<100||height<80) return new(bounds,new(0,0,0,0),[]);
         double header=string.IsNullOrEmpty(model.Title)?8:string.IsNullOrEmpty(model.Subtitle)?35:53;
         bool noAxes=model.RenderableSeries.Any(s=>s.IsVisible&&s.IsCircular);
         if(noAxes||model.CoordinateSystem!=CoordinateSystem.Cartesian)
         {
-            var plot=new RectD(42,header+12,Math.Max(1,width-84),Math.Max(1,height-header-55));
-            return new(bounds,plot,[],header);
+            var natural=new PlotMargins(42,header+12,42,43);
+            var margins=PlotMargins.Max(natural,minimumMargins);
+            return new(bounds,Plot(bounds,margins),[],header,natural);
         }
         double left=12,right=12,top=header,bottom=12;
         var thickness=new Dictionary<AxisModel,double>();
@@ -49,7 +52,9 @@ public sealed class ChartLayout
             thickness[axis]=band;
             switch(axis.AxisAlignment) { case AxisAlignment.Left:left+=band;break;case AxisAlignment.Right:right+=band;break;case AxisAlignment.Top:top+=band;break;case AxisAlignment.Bottom:bottom+=band;break; }
         }
-        var area=new RectD(left,top,Math.Max(1,width-left-right),Math.Max(1,height-top-bottom));
+        var naturalMargins=new PlotMargins(left,top,right,bottom);
+        var area=Plot(bounds,PlotMargins.Max(naturalMargins,minimumMargins));
+        if(area.IsEmpty) return new(bounds,area,[],header,naturalMargins);
         double l=area.X,r=area.Right,t=area.Y,b=area.Bottom;
         var layouts=new List<AxisLayout>();
         foreach(var axis in model.XAxes.Concat(model.YAxes).Where(a=>a.IsVisible))
@@ -64,8 +69,16 @@ public sealed class ChartLayout
             }
             layouts.Add(new(axis,rect,TickGenerator.Generate(axis,axis.IsVertical?area.Height:area.Width),new(axis,axis.IsVertical?area.Y:area.X,axis.IsVertical?area.Height:area.Width)));
         }
-        return new(bounds,area,layouts,header);
+        return new(bounds,area,layouts,header,naturalMargins);
     }
+    private static RectD Plot(RectD bounds,PlotMargins margins)
+    {
+        // Preserve an empty plot when the reserved axes do not fit. Never put a fabricated
+        // one-pixel plot outside the surface, or create zero-size coordinate calculators.
+        double x=Math.Min(bounds.Width,margins.Left), y=Math.Min(bounds.Height,margins.Top);
+        return new(x,y,Math.Max(0,bounds.Width-x-margins.Right),Math.Max(0,bounds.Height-y-margins.Bottom));
+    }
+
 }
 
 public sealed class SeriesProjection
