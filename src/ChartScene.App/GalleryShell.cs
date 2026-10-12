@@ -20,7 +20,7 @@ public sealed class GalleryShell : UserControl
     public GalleryShell()
     {
         RequestedTheme=ElementTheme.Dark;HorizontalContentAlignment=HorizontalAlignment.Stretch;VerticalContentAlignment=VerticalAlignment.Stretch;
-        _factories=new(){["2d"]=()=>new MainPage(),["3d"]=()=>new ThreeDPage(),["linked"]=()=>new LinkedChartsPage(),["colors"]=()=>new ColorLegendsPage(),["overview"]=()=>new OverviewPage(),["stacks"]=()=>new StackedDataPage(),["legends"]=()=>new LegendsPage()};
+        _factories=new(){["2d"]=()=>new MainPage(),["3d"]=()=>new ThreeDPage(),["linked"]=()=>new LinkedChartsPage(),["colors"]=()=>new ColorLegendsPage(),["overview"]=()=>new OverviewPage(),["stacks"]=()=>new StackedDataPage(),["legends"]=()=>new LegendsPage(),["editing"]=()=>new EditingPage()};
         _root.RowDefinitions.Add(new(){Height=new GridLength(36)});_root.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star)});
         var tabs=new StackPanel{Orientation=Orientation.Horizontal,Spacing=4,Padding=new Thickness(10,3,10,3)};
         void Tab(string id,string label,ChartGlyph glyph)
@@ -30,7 +30,7 @@ public sealed class GalleryShell : UserControl
             button.Click+=(_,_)=>Switch(id);_tabs.Add(id,button);tabs.Children.Add(button);
         }
         Tab("2d","2D Charts",ChartGlyph.Line);Tab("3d","3D Charts",ChartGlyph.Surface);Tab("linked","Linked",ChartGlyph.Cursor);
-        Tab("colors","Color legends",ChartGlyph.Grid);Tab("overview","Overview",ChartGlyph.Fit);Tab("stacks","Stacked data",ChartGlyph.Columns);Tab("legends","Legends",ChartGlyph.Select);
+        Tab("colors","Color legends",ChartGlyph.Grid);Tab("overview","Overview",ChartGlyph.Fit);Tab("stacks","Stacked data",ChartGlyph.Columns);Tab("legends","Legends",ChartGlyph.Select);Tab("editing","Edit data",ChartGlyph.Annotate);
         tabs.Children.Add(new TextBlock{Text="UNO  ·  DESKTOP + WEB",FontSize=9,Opacity=.5,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(18,0,0,0)});
         _root.Children.Add(new Border{Background=new SolidColorBrush(Windows.UI.Color.FromArgb(255,17,22,33)),BorderThickness=new Thickness(0,0,0,1),BorderBrush=new SolidColorBrush(Windows.UI.Color.FromArgb(255,45,55,72)),Child=new ScrollViewer{Content=tabs,HorizontalScrollMode=ScrollMode.Enabled,HorizontalScrollBarVisibility=ScrollBarVisibility.Hidden,VerticalScrollMode=ScrollMode.Disabled,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled}});
         Grid.SetRow(_content,1);_root.Children.Add(_content);Content=_root;
