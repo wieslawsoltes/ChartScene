@@ -12,7 +12,7 @@ using Windows.Foundation;
 
 namespace ChartScene.App;
 
-public sealed class LinkedChartsPage : Page
+public sealed partial class LinkedChartsPage : Page
 {
     private readonly ChartSurface _upper = new(), _lower = new();
     private readonly CheckBox _rangeLink = new() { Content = "Link X ranges", IsChecked = true, MinHeight = 30 };
@@ -39,12 +39,15 @@ public sealed class LinkedChartsPage : Page
         toolbar.Children.Add(Button("fit", "Fit", Reset));
         toolbar.Children.Add(Button("replace", "Replace lower model", ReplaceLower));
         toolbar.Children.Add(Button("theme", "Light / dark", ToggleTheme));
-        root.Children.Add(new ScrollViewer { Content = toolbar, HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollMode = ScrollMode.Disabled });
+        var toolbars = new StackPanel();
+        toolbars.Children.Add(new ScrollViewer { Content = toolbar, HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollMode = ScrollMode.Disabled });
+        BuildLayoutToolbar(toolbars); root.Children.Add(toolbars);
         Grid.SetRow(_upper, 1); Grid.SetRow(_lower, 2); Grid.SetRow(_status, 3);
         root.Children.Add(_upper); root.Children.Add(_lower); root.Children.Add(_status); Content = root;
         Register("upper", _upper); Register("lower", _lower); Register("ranges", _rangeLink); Register("cursors", _cursorLink);
         _upper.Model = CreateModel(false); _lower.Model = CreateModel(true);
         _upper.Controller.InterpolateRollover = _lower.Controller.InterpolateRollover = true;
+        InitializeLayout();
         _upper.RenderCompleted += (_, _) => Publish(); _lower.RenderCompleted += (_, _) => Publish();
         _rangeLink.Checked += (_, _) => Relink(); _rangeLink.Unchecked += (_, _) => Relink();
         _cursorLink.Checked += (_, _) => Relink(); _cursorLink.Unchecked += (_, _) => Relink();
@@ -79,6 +82,7 @@ public sealed class LinkedChartsPage : Page
         data.AppendRange(x, y);
         var color = model.Theme.Palette[milliseconds ? 1 : 0];
         model.RenderableSeries.Add(new FastLineRenderableSeries { DataSeries = data, SeriesName = milliseconds ? "Response" : "Reference", Stroke = color });
+        ConfigureLayoutAxes(model, milliseconds);
         return model;
     }
     private void Relink()
@@ -145,6 +149,7 @@ public sealed class LinkedChartsPage : Page
     private void Publish()
     {
         if (!IsLoaded) return;
+        PublishLayout();
         var error = _upper.LastError ?? _lower.LastError;
         bool ready = _upper.LastFrame is not null && _lower.LastFrame is not null && error is null;
         _status.Text = error ?? $"Range linking: {(_rangeLink.IsChecked == true ? "on" : "off")} · Cursor linking: {(_cursorLink.IsChecked == true ? "on" : "off")} · Source data is unchanged by linked navigation.";

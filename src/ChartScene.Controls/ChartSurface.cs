@@ -27,6 +27,28 @@ public class ChartSurface:UserControl,IDisposable
         public void RequestRender()=>Invalidate();
     }
     private readonly PlotCanvas _canvas;
+    private object? _layoutOwner;
+    private PlotMargins _groupMargins;
+    public static readonly DependencyProperty MinimumPlotMarginsProperty=DependencyProperty.Register(nameof(MinimumPlotMargins),typeof(PlotMargins),typeof(ChartSurface),new PropertyMetadata(default(PlotMargins),(d,_)=>((ChartSurface)d).RequestRender()));
+    /// <summary>Explicit per-view reservations, independent of model state and group margins.</summary>
+    public PlotMargins MinimumPlotMargins { get=>(PlotMargins)GetValue(MinimumPlotMarginsProperty);set=>SetValue(MinimumPlotMarginsProperty,value); }
+    internal void ClaimLayout(object owner)
+    {
+        ObjectDisposedException.ThrowIf(_disposed,this);
+        if(_layoutOwner is not null&&!ReferenceEquals(_layoutOwner,owner))throw new InvalidOperationException("A chart can belong to only one layout group.");
+        _layoutOwner=owner;
+    }
+    internal void SetGroupMargins(object owner,PlotMargins value)
+    {
+        if(!ReferenceEquals(_layoutOwner,owner)||_groupMargins==value)return;
+        _groupMargins=value;RequestRender();
+    }
+    internal void ReleaseLayout(object owner)
+    {
+        if(!ReferenceEquals(_layoutOwner,owner))return;
+        SetGroupMargins(owner,default);_layoutOwner=null;
+    }
+
     private SkiaChartSceneCache? _sceneCache;
     public SceneCacheStatistics SceneCacheStatistics=>_sceneCache?.Statistics??default;
     private SkiaResources? _resources;
@@ -94,7 +116,7 @@ public class ChartSurface:UserControl,IDisposable
         _sceneCache??=new();
         try
         {
-            LastFrame=_sceneCache.Render(canvas,Model,area.Width,area.Height,_controller.View);
+            LastFrame=_sceneCache.Render(canvas,Model,area.Width,area.Height,_controller.View,PlotMargins.Max(MinimumPlotMargins,_groupMargins));
             _controller.SetFrame(LastFrame); FrameCount++; LastError=LastFrame.Diagnostics.Count==0?null:string.Join("\n",LastFrame.Diagnostics);
             RenderCompleted?.Invoke(this,LastFrame);
         }
