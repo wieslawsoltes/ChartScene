@@ -15,7 +15,7 @@ public class RenderableSeries : ObservableObject,IDisposable
     private IDataSeries? _data;
     private HeatmapGrid? _grid;
     private string _name="Series",_xAxisId="X",_yAxisId="Y",_group="default";
-    private bool _visible=true,_selected,_labels;
+    private bool _visible=true,_selected,_labels,_includeInLegend=true;
     private ColorRgba _stroke=ChartTheme.Dark.Palette[0],_fill=ChartTheme.Dark.Palette[0].WithAlpha(85),_strokeY1=ChartTheme.Dark.Palette[1],_fillY1=ChartTheme.Dark.Palette[1].WithAlpha(70);
     private double _thickness=1.5,_markerSize=6,_pointWidth=.72,_baseline,_opacity=1;
     private PointMarker _marker;
@@ -38,6 +38,8 @@ public class RenderableSeries : ObservableObject,IDisposable
     public string XAxisId { get=>_xAxisId; set=>Set(ref _xAxisId,value); }
     public string YAxisId { get=>_yAxisId; set=>Set(ref _yAxisId,value); }
     public string StackedGroupId { get=>_group; set=>Set(ref _group,value??"default"); }
+    /// <summary>Include this series in built-in and external legends without hiding its plot.</summary>
+    public bool IncludeInLegend { get=>_includeInLegend; set=>Set(ref _includeInLegend,value); }
     public bool IsVisible { get=>_visible; set=>Set(ref _visible,value); }
     public bool IsSelected { get=>_selected; set=>Set(ref _selected,value); }
     public bool ShowDataLabels { get=>_labels; set=>Set(ref _labels,value); }

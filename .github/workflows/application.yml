@@ -66,7 +66,7 @@ jobs:
           trap 'kill "$server"' EXIT
           failed=0
           python tests/browser/validate.py --url http://127.0.0.1:8765/ChartScene/ --catalog || failed=1
-          for suite in linked 3d colors overview stacks startup catalogue; do
+          for suite in legends linked 3d colors overview stacks startup catalogue; do
             python "tests/browser/validate-$suite.py" --url http://127.0.0.1:8765/ChartScene/ || failed=1
           done
           # continue-on-error above only allows all suites/evidence to run.
@@ -132,6 +132,7 @@ jobs:
             artifacts/logs/
             artifacts/browser-tests/
             artifacts/browser-tests-linked/
+            artifacts/browser-tests-legends/
             artifacts/browser-tests-3d/
             artifacts/browser-tests-colors/
             artifacts/browser-tests-overview/

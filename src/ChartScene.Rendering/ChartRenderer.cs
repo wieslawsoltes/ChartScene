@@ -133,7 +133,7 @@ public sealed partial class ChartRenderer
     }
     private void DrawLegend(IChartCanvas c,ChartModel m,ChartLayout l)
     {
-        var all=m.RenderableSeries.ToArray(); if(all.Length==0) return;
+        var all=m.RenderableSeries.Where(s=>s.IncludeInLegend).ToArray(); if(all.Length==0) return;
         double rowHeight=20,width=Math.Max(120,all.Select(s=>c.MeasureText(s.SeriesName,new(m.Theme.Foreground,11)).Width+60).Max());
         int rows=Math.Max(1,Math.Min(all.Length,(int)(l.PlotArea.Height/2/rowHeight)));
         int columns=(int)Math.Ceiling((double)all.Length/rows);
@@ -144,7 +144,7 @@ public sealed partial class ChartRenderer
             var s=all[i]; int col=i/rows,row=i%rows; var r=new RectD(x+col*width,y+row*rowHeight,width,rowHeight); _legend.Add(new(s,r));
             c.DrawRectangle(new(r.X+2,r.Y+4,10,10),s.IsVisible?s.Stroke:null,new(s.Stroke));
             if(s.IsVisible) c.DrawPolyline([new(r.X+4,r.Y+9),new(r.X+6,r.Y+11),new(r.X+10,r.Y+6)],new(m.Theme.Background,1.2));
-            c.DrawLine(new(r.X+18,r.Y+9),new(r.X+34,r.Y+9),new(s.Stroke,s.IsSelected?3:1.5));
+            LegendMarkerRenderer.Draw(c,s,new(r.X+16,r.Y+1,22,17));
             c.DrawText(s.SeriesName,new(r.X+40,r.Y+13),new(s.IsVisible?m.Theme.Foreground:m.Theme.Muted,11));
         }
     }

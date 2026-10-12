@@ -93,7 +93,8 @@ public sealed class ThreeDPage : Page
     }
     private int FocusedIndex(ComboBox box)
     {
-        DependencyObject? focused=FocusManager.GetFocusedElement(XamlRoot) as DependencyObject;
+        if (XamlRoot is not { } root) return -1;
+        DependencyObject? focused=FocusManager.GetFocusedElement(root) as DependencyObject;
         while(focused is not null)
         {
             if(focused is ComboBoxItem item) return box.IndexFromContainer(item);
