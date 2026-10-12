@@ -1,0 +1,63 @@
+name: Cursor allocation qualification
+on:
+  pull_request:
+    paths:
+      - tests/ChartScene.Tests/CursorLayoutTests.cs
+      - src/ChartScene.Interaction/ChartCursorSyncGroup.cs
+      - .github/workflows/cursor-allocation.yml
+  push:
+    branches: [main]
+    paths:
+      - tests/ChartScene.Tests/CursorLayoutTests.cs
+      - src/ChartScene.Interaction/ChartCursorSyncGroup.cs
+      - .github/workflows/cursor-allocation.yml
+permissions:
+  contents: read
+jobs:
+  fresh-processes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        tiering: [default, disabled]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet build tests/ChartScene.Tests -c Release
+      - name: Check every fresh process without retrying failures
+        env:
+          TEST_TIERING: ${{ matrix.tiering }}
+        shell: python
+        run: |
+          from pathlib import Path
+          import json, os, shutil, subprocess
+          output = Path('artifacts/cursor-qualification')
+          output.mkdir(parents=True, exist_ok=True)
+          env = os.environ.copy()
+          if env['TEST_TIERING'] == 'disabled': env['DOTNET_TieredCompilation'] = '0'
+          records = []
+          for iteration in range(3):
+              directory = output / str(iteration)
+              directory.mkdir()
+              result = subprocess.run(['dotnet','tests/ChartScene.Tests/bin/Release/net10.0/ChartScene.Tests.dll'],
+                  env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120)
+              (directory / 'console.log').write_text(result.stdout)
+              for name in ['core-tests.json', 'performance/cursor-layout.json']:
+                  source = Path('artifacts') / name
+                  if source.is_file(): shutil.copy2(source, directory / source.name)
+              for line in result.stdout.splitlines():
+                  if line.startswith(('FAIL ', 'PERF_CURSOR_LAYOUT ')) or 'tests passed' in line:
+                      print(env['TEST_TIERING'], iteration, line, flush=True)
+              records.append({'process': iteration, 'exitCode': result.returncode})
+          (output / 'processes.json').write_text(json.dumps({'tiering':env['TEST_TIERING'],'processes':records}, indent=2))
+          if any(record['exitCode'] != 0 for record in records):
+              raise SystemExit('At least one fresh process failed; all results are retained, no successful sample replaces it.')
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cursor-qualification-${{ matrix.tiering }}
+          path: artifacts/cursor-qualification/
+          if-no-files-found: error
