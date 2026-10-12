@@ -31,6 +31,7 @@ public sealed class EditingPage : Page
     private readonly TextBlock _point = new() { FontSize = 24, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(0, 8, 0, 8) };
     private readonly TextBlock _details = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap };
     private readonly Border _inspector = new() { Padding = new Thickness(14), Margin = new Thickness(8), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(2) };
+    private UndoManager? _observedHistory;
     private readonly DispatcherTimer _diagnostics = new() { Interval = TimeSpan.FromMilliseconds(200) };
     private readonly ChartTheme _dark = ChartTheme.Dark with { Background = new(21, 26, 38), PlotBackground = new(25, 42, 65), Border = new(49, 59, 77) };
     private static readonly SeriesKind[] Kinds = [SeriesKind.Line, SeriesKind.Spline, SeriesKind.Scatter, SeriesKind.Column, SeriesKind.Bar, SeriesKind.Impulse];
@@ -89,11 +90,24 @@ public sealed class EditingPage : Page
         AutomationProperties.SetHelpText(_chart, "In Edit points mode, drag an original marker to change its Y value. Escape cancels. Control-Z undoes. Control-Y redoes. F6 applies an external source update.");
         _editor.Changed += (_, _) => { if (_editor.ActiveIndex >= 0) _lastIndex = _editor.ActiveIndex; UpdatePresentation(); Publish(); };
         _chart.RenderCompleted += (_, _) => { UpdatePresentation(); Publish(); };
-        _diagnostics.Tick += (_, _) => { UpdatePresentation(); Publish(); };
+        _diagnostics.Tick += (_, _) => Publish();
         KeyDown += (_, e) => { if (e.Key == VirtualKey.F6) { Act("external", ExternalUpdate); e.Handled = true; } };
-        Loaded += (_, _) => { if (_model is null) LoadModel(); ArrangeInspector(); ApplyTheme(); _diagnostics.Start(); };
-        Unloaded += (_, _) => { _diagnostics.Stop(); _chart.Controller.Cancel(); };
+        Loaded += (_, _) => { if (_model is null) LoadModel(); ArrangeInspector(); ApplyTheme(); ObserveHistory(); _diagnostics.Start(); };
+        Unloaded += (_, _) => { _diagnostics.Stop(); ObserveHistory(detach: true); _chart.Controller.Cancel(); };
         SizeChanged += (_, _) => { ArrangeInspector(); Publish(); };
+    }
+    private void ObserveHistory(bool detach = false)
+    {
+        var next = !detach && IsLoaded && _model is not null ? _chart.Controller.History : null;
+        if (ReferenceEquals(next, _observedHistory)) return;
+        if (_observedHistory is not null) _observedHistory.Changed -= HistoryChanged;
+        _observedHistory = next;
+        if (next is not null) next.Changed += HistoryChanged;
+    }
+    private void HistoryChanged(object? sender, EventArgs args)
+    {
+        if (!IsLoaded || !ReferenceEquals(sender, _observedHistory)) return;
+        UpdatePresentation(); Publish();
     }
     private void Register(string id, FrameworkElement element)
     { _controls[id] = element; AutomationProperties.SetAutomationId(element, "editing-" + id); UiInputTrace.Register(element, "editing-" + id); }
@@ -113,7 +127,7 @@ public sealed class EditingPage : Page
         model.RenderableSeries.Add(series);
         _chart.Model = model; _chart.Controller.Modifiers.Insert(0, _editor);
         _model = model; _series = series; _data = data; _generation++; _lastIndex = 8;
-        ConfigureAxes(); previous.Dispose(); UpdatePresentation();
+        ConfigureAxes(); previous.Dispose(); ObserveHistory(); UpdatePresentation();
     }
     private AxisModel ValueAxis => Kinds[_kind] == SeriesKind.Bar ? _model!.XAxis : _model!.YAxis;
     private void ConfigureAxes()
@@ -192,7 +206,7 @@ public sealed class EditingPage : Page
             _editor.CommittedEdits, _editor.Conflicts, data.Revision, _chart.Controller.History.CanUndo, _chart.Controller.History.CanRedo,
             _actions, _lastAction, ValueAxis.IsVertical, _logarithmic, _rotated, _flipped, _chart.FrameCount,
             new(origin.X + plot.X, origin.Y + plot.Y, plot.Width, plot.Height), points,
-            _controls.ToDictionary(p => p.Key, p => Bounds(p.Value)));
+            _controls.ToDictionary(p => p.Key, p => Bounds(p.Value)), _commands["undo"].IsEnabled, _commands["redo"].IsEnabled);
         Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.chartSceneEditing=" + JsonSerializer.Serialize(state, EditingJsonContext.Default.EditingSnapshot));
 #endif
     }
@@ -200,6 +214,6 @@ public sealed class EditingPage : Page
 public sealed record EditablePointSnapshot(int index, double x, double y, double? screenX, double? screenY);
 public sealed record EditingSnapshot(bool ready, string? error, int generation, string kind, string theme, bool enabled, bool editing, string outcome,
     long commits, long conflicts, long dataRevision, bool canUndo, bool canRedo, long actions, string lastAction, bool valueVertical,
-    bool logarithmic, bool rotated, bool flipped, long frames, ControlBounds plot, EditablePointSnapshot[] points, Dictionary<string, ControlBounds?> controls);
+    bool logarithmic, bool rotated, bool flipped, long frames, ControlBounds plot, EditablePointSnapshot[] points, Dictionary<string, ControlBounds?> controls, bool undoEnabled, bool redoEnabled);
 [JsonSerializable(typeof(EditingSnapshot))]
 public partial class EditingJsonContext : JsonSerializerContext;

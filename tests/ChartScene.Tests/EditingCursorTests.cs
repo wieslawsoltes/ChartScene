@@ -34,6 +34,28 @@ public static class EditingCursorTests
     }
     public static void Register(TestSuite suite)
     {
+        suite.Run("editing double-clicks never escape into navigation history", () =>
+        {
+            using var f = new Fixture(); var point = f.Screen(1, 5);
+            var x = f.Model.XAxis.VisibleRange; var y = f.Model.YAxis.VisibleRange;
+            long revision = f.Data.Revision;
+            f.Send(ChartInputKind.Down, point); f.Send(ChartInputKind.Up, point);
+            // Native DoubleTapped is routed without the original PointerId and can
+            // arrive after the second release, when the modifier has no session.
+            f.Controller.Process(new(ChartInputKind.DoubleClick, point));
+            TestSuite.Equal(f.Model.XAxis.VisibleRange, x); TestSuite.Equal(f.Model.YAxis.VisibleRange, y);
+            TestSuite.Equal(f.Data.Revision, revision); TestSuite.True(!f.Controller.History.CanUndo);
+            f.Send(ChartInputKind.Down, point); TestSuite.True(f.Editor.IsEditing);
+            f.Send(ChartInputKind.Move, f.Screen(1, 7)); f.Send(ChartInputKind.Up, f.Screen(1, 7));
+            TestSuite.Near(f.Data.Snapshot()[1, 1], 7); f.Controller.History.Undo();
+            TestSuite.Near(f.Data.Snapshot()[1, 1], 5); TestSuite.True(!f.Controller.History.CanUndo);
+        });
+        suite.Run("disabled point editing retains double-click zoom extents", () =>
+        {
+            using var f = new Fixture(); f.Editor.IsEnabled = false;
+            f.Controller.Process(new(ChartInputKind.DoubleClick, f.Screen(1, 5)));
+            TestSuite.True(f.Controller.History.CanUndo);
+        });
         suite.Run("captured editing cursor stays on source point during perpendicular and foreign movement", () =>
         {
             using var f = new Fixture(); var point = f.Screen(1, 5);

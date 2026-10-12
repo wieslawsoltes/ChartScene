@@ -77,7 +77,7 @@ with sync_playwright() as p:
         if not state().get('ready'): raise RuntimeError('Legend gallery did not start')
         test('legend series swatches produce visible pixels',lambda:pixels('legend-right-dark'))
         def visibility():
-            before=identities();rows=state()['rowsCreated'];toggle('sine');command('undo');visible('sine',True)
+            before=identities();rows=state()['rowsCreated'];toggle('sine');assert state()['undoEnabled'];command('undo');visible('sine',True);assert state()['redoEnabled']
             command('redo');visible('sine',False);command('undo');visible('sine',True)
             assert identities()==before and state()['rowsCreated']==rows
         test('native visibility checkboxes share chart undo redo',visibility)

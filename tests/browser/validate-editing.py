@@ -99,7 +99,7 @@ with sync_playwright() as p:
         test('native point editing startup',ready)
         test('editing plot contains visible source geometry',lambda:pixels('editing-dark'))
         def basic():
-            command('reset');value=drag(70);command('undo');wait_value(50);command('redo');wait_value(value)
+            command('reset');value=drag(70);assert state()['undoEnabled'];command('undo');wait_value(50);assert state()['redoEnabled'];command('redo');wait_value(value)
             pixels('editing-dragged')
         test('original source drag preserves X and supports shared undo redo',basic)
         def reset():
@@ -119,6 +119,14 @@ with sync_playwright() as p:
             page.wait_for_function('window.chartSceneEditing.editing===false');ready()
             assert state()['dataRevision']==before['dataRevision'] and not state()['canUndo']
         test('stationary marker clicks preserve exact data revision',stationary)
+        def doubletap():
+            command('reset');before=state();point=before['points'][8];after=sequence()
+            page.mouse.dblclick(point['screenX'],point['screenY'],delay=40)
+            event('doubletap',after,point['screenX'],point['screenY']);ready()
+            assert not state()['canUndo'] and state()['dataRevision']==before['dataRevision']
+            assert all(abs(a[k]-b[k])<1e-9 for a,b in zip(state()['points'],before['points']) for k in ['screenX','screenY','x','y'])
+            value=drag(65);command('undo');wait_value(50);command('redo');wait_value(value)
+        test('native double-tap in edit mode never zooms or invalidates the next drag',doubletap)
         def history():
             command('reset');first=drag(60);second=drag(70)
             command('undo');wait_value(first);command('undo');wait_value(50)

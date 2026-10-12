@@ -73,6 +73,12 @@ public sealed class DataPointEditModifier : ChartModifier, IChartCursorOwner
             if (input.Kind == ChartInputKind.Up && ReferenceEquals(_session, active)) Complete(active);
             return ModifierResult.Handled;
         }
+        // Native double-tap notifications can follow release (or a source reset).
+        // Editing mode must not turn them into ZoomExtents and invalidate the next
+        // original-point grab. Disabled editing keeps the normal navigation behavior.
+        if (IsEnabled && input.Kind == ChartInputKind.DoubleClick && controller.Frame is { } currentFrame
+            && input.Position.IsFinite && currentFrame.Layout.PlotArea.Contains(input.Position))
+            return ModifierResult.Handled;
         if (!IsEnabled || input.Kind != ChartInputKind.Down || controller.Frame is not { } frame
             || !input.Position.IsFinite || !frame.Layout.PlotArea.Contains(input.Position)) return ModifierResult.Unhandled;
         // Editing mode consumes blank plot clicks instead of unexpectedly starting a pan.
