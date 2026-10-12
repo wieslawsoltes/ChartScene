@@ -8,6 +8,7 @@ using ChartScene.Rendering;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
 
@@ -31,10 +32,14 @@ public sealed class LegendsPage : Page
     private RenderableSeries? _optional;
     private int _placement, _generation, _appends, _oldEdits;
     private bool _light, _style, _customRow, _customMarker;
+    private long _actions;
+    private string _lastAction = "";
+    private readonly ChartTheme _dark = ChartTheme.Dark with { Background = new(21,26,38), PlotBackground = new(25,42,65), Border = new(49,59,77) };
     private static readonly string[] Placements = ["Right", "Bottom", "Left", "Top", "Inside"];
     public LegendsPage()
     {
         RequestedTheme = ElementTheme.Dark;
+        HorizontalContentAlignment = HorizontalAlignment.Stretch; VerticalContentAlignment = VerticalAlignment.Stretch;
         _root.RowDefinitions.Add(new() { Height = GridLength.Auto });
         _root.RowDefinitions.Add(new() { Height = GridLength.Auto });
         _root.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
@@ -45,7 +50,7 @@ public sealed class LegendsPage : Page
         void Command(string id, string label, ChartGlyph glyph, Action action)
         {
             var button = new ChartToolButton(glyph, id is "placement" or "filter" or "checks" or "markers" ? label : ""); button.Describe(label);
-            button.Click += (_, _) => { action(); UpdateCommands(); Publish(); };
+            button.Click += (_, _) => { _actions++; _lastAction = id; action(); UpdateCommands(); Publish(); };
             _buttons.Add(id, button); Register(id, button); tools.Children.Add(button);
         }
         Command("placement", "Place: Right", ChartGlyph.Grid, () => { _placement = (_placement + 1) % Placements.Length; PlaceLegend(); });
@@ -86,7 +91,7 @@ public sealed class LegendsPage : Page
     }
     private RenderableSeries Find(string id) => _model!.RenderableSeries.First(s => s.Id == id);
     private void Register(string id, FrameworkElement element)
-    { _controls[id] = element; AutomationProperties.SetAutomationId(element, "legends-" + id); }
+    { _controls[id] = element; AutomationProperties.SetAutomationId(element, "legends-" + id); UiInputTrace.Register(element, "legends-" + id); }
     private static SolidColorBrush Brush(ColorRgba c) => new(Windows.UI.Color.FromArgb(c.A, c.R, c.G, c.B));
     private void PlaceLegend()
     {
@@ -103,7 +108,7 @@ public sealed class LegendsPage : Page
     private void LoadModel()
     {
         _generation++; _style = false;
-        var model = new ChartModel { Title = "Interactive chart legend", Subtitle = "The same series models drive the plot, legend and visibility history", ShowLegend = false, Theme = _light ? ChartTheme.Light : ChartTheme.Dark };
+        var model = new ChartModel { Title = "Interactive chart legend", Subtitle = "The same series models drive the plot, legend and visibility history", ShowLegend = false, Theme = _light ? ChartTheme.Light : _dark };
         string[] ids = ["sine", "cosine", "area", "scatter"];
         string[] names = ["Sine wave", "Cosine wave", "Envelope", "Samples"];
         SeriesKind[] kinds = [SeriesKind.Line, SeriesKind.Line, SeriesKind.Mountain, SeriesKind.Scatter];
@@ -119,7 +124,7 @@ public sealed class LegendsPage : Page
         model.XAxis.AutoRange = model.YAxis.AutoRange = AutoRange.Never;
         model.XAxis.AxisTitle = "Time (s)"; model.YAxis.AxisTitle = "Amplitude";
         _previous?.Dispose(); _previous = _model; _model = model; _chart.Model = model;
-        _optional = model.RenderableSeries[^1]; _previous?.Dispose(); UpdateCommands(); ApplyTheme();
+        _optional = model.RenderableSeries[^1]; UpdateCommands(); ApplyTheme();
     }
     private static double Signal(double x, int series) => series switch { 1 => Math.Cos(x * 1.4), 2 => .5 * Math.Sin(x * .6) + .2, 3 => Math.Sin(x * 1.4) * .8 - .4, _ => Math.Sin(x * 1.4) };
     private void ChangeStyle()
@@ -148,7 +153,7 @@ public sealed class LegendsPage : Page
     }
     private void ApplyTheme()
     {
-        var theme = _light ? ChartTheme.Light : ChartTheme.Dark;
+        var theme = _light ? ChartTheme.Light : _dark;
         RequestedTheme = _light ? ElementTheme.Light : ElementTheme.Dark;
         _root.Background = Brush(theme.Background); _legendHost.Background = Brush(theme.Background); _legendHost.BorderBrush = Brush(theme.Border);
         _heading.Foreground = Brush(theme.Foreground); _description.Foreground = _status.Foreground = Brush(theme.Muted);
@@ -167,29 +172,39 @@ public sealed class LegendsPage : Page
     }
     private static ControlBounds? Bounds(FrameworkElement? element)
     {
-        if (element is null || !element.IsLoaded || element.Visibility != Visibility.Visible || element.ActualWidth <= 0 || element.ActualHeight <= 0) return null;
+        if (element is null || !element.IsLoaded || element.ActualWidth <= 0 || element.ActualHeight <= 0) return null;
+        for (DependencyObject? current = element; current is not null; current = VisualTreeHelper.GetParent(current))
+            if (current is UIElement ui && ui.Visibility != Visibility.Visible) return null;
         var p = element.TransformToVisual(null).TransformPoint(new Point(0, 0)); return new(p.X, p.Y, element.ActualWidth, element.ActualHeight);
+    }
+    private static CheckBox? Checkbox(DependencyObject? element)
+    {
+        if (element is CheckBox box) return box;
+        if (element is null) return null;
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
+            if (Checkbox(VisualTreeHelper.GetChild(element, i)) is { } child) return child;
+        return null;
     }
     private void Publish()
     {
         if (!IsLoaded || _model is null) return;
         _status.Text = _chart.LastError ?? $"{_legend.Entries.Count} legend entries · {_legend.RowCreationCount} rows created · {_legend.MembershipPassCount} membership passes · Native checkboxes retain focus on edits";
 #if __WASM__
-        var state = new LegendsSnapshot(_chart.LastError is null && _chart.LastFrame is not null && _legend.Entries.Count > 0,
+        var state = new LegendsSnapshot(_chart.LastError is null && _chart.LastFrame?.Statistics.ModelRevision == _model.Revision && _legend.IsLoaded,
             _chart.LastError, _generation, _appends, _oldEdits, Placements[_placement], _legend.SourceMode.ToString(), _model.Theme.Name,
             _legend.ShowVisibilityCheckboxes, _legend.ShowSeriesMarkers, _customRow, _customMarker, _legend.RowCreationCount, _legend.EntryCreationCount, _legend.MembershipPassCount,
-            _chart.Controller.History.CanUndo, _chart.Controller.History.CanRedo,
-            _legend.Entries.Select(e => new LegendEntrySnapshot(e.Identity, e.Series.Id, e.SeriesName, e.IsVisible, Bounds(_legend.ContainerFromEntry(e)))).ToArray(),
+            _chart.Controller.History.CanUndo, _chart.Controller.History.CanRedo, _chart.FrameCount, _actions, _lastAction, _legend.RetainedRowCount,
+            _legend.Entries.Select(e => new LegendEntrySnapshot(e.Identity, e.Series.Id, e.SeriesName, e.IsVisible, Bounds(_legend.ContainerFromEntry(e)), Bounds(Checkbox(_legend.ContainerFromEntry(e))))).ToArray(),
             _model.RenderableSeries.Select(s => new LegendSeriesSnapshot(s.Id, s.SeriesName, s.IsVisible, s.IncludeInLegend, s.IsSelected, s.DataSeries?.Count ?? 0)).ToArray(),
             _controls.ToDictionary(p => p.Key, p => Bounds(p.Value)));
         Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.chartSceneLegends=" + JsonSerializer.Serialize(state, LegendsJsonContext.Default.LegendsSnapshot));
 #endif
     }
 }
-public sealed record LegendEntrySnapshot(long identity, string id, string name, bool visible, ControlBounds? bounds);
+public sealed record LegendEntrySnapshot(long identity, string id, string name, bool visible, ControlBounds? bounds, ControlBounds? checkbox);
 public sealed record LegendSeriesSnapshot(string id, string name, bool visible, bool included, bool selected, int points);
 public sealed record LegendsSnapshot(bool ready, string? error, int generation, int appends, int oldEdits, string placement, string filter, string theme,
-    bool checkboxes, bool markers, bool rowTemplate, bool markerTemplate, long rowsCreated, long entriesCreated, long membershipPasses, bool canUndo, bool canRedo,
+    bool checkboxes, bool markers, bool rowTemplate, bool markerTemplate, long rowsCreated, long entriesCreated, long membershipPasses, bool canUndo, bool canRedo, long frames, long actions, string lastAction, int retainedRows,
     LegendEntrySnapshot[] entries, LegendSeriesSnapshot[] series, Dictionary<string, ControlBounds?> controls);
 [JsonSerializable(typeof(LegendsSnapshot))]
 public partial class LegendsJsonContext : JsonSerializerContext;

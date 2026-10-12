@@ -8,6 +8,7 @@ import time
 import traceback
 from PIL import Image
 from playwright.sync_api import sync_playwright
+from uno_input import UnoInput
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--url', default='http://127.0.0.1:8765/ChartScene/')
@@ -21,14 +22,14 @@ with sync_playwright() as playwright:
     page.set_default_timeout(20_000)
     page.on('pageerror', lambda e: logs.append({'type': 'pageerror', 'text': str(e)}))
     page.on('console', lambda e: logs.append({'type': e.type, 'text': e.text}))
+    inputs = UnoInput(page, out)
     def state(): return page.evaluate('window.chartSceneOverview || {}')
     def ready(preset=None):
         page.wait_for_function('''id=>{const s=window.chartSceneOverview;if(s?.error)throw new Error(s.error);return s?.ready&&(!id||s.preset===id)}''', arg=preset, timeout=120_000)
     def wait_range_changed(before, dimension='x'):
         page.wait_for_function('''a=>{const s=window.chartSceneOverview;return a.dimension==='x'?(s.min!==a.min||s.max!==a.max):(s.yMin!==a.yMin||s.yMax!==a.yMax);}''', arg=dict(before, dimension=dimension))
     def click(name):
-        b = state()['controls'][name]
-        page.mouse.click(b['x']+b['width']/2, b['y']+b['height']/2)
+        inputs.click('overview-'+name, state()['controls'][name], resolve=lambda: state()['controls'][name])
     def at(x, y=.5, view='overview'):
         r = state()[view]['track']
         return (r['x']+x*r['width'], r['y']+y*r['height'])
@@ -38,7 +39,19 @@ with sync_playwright() as playwright:
     def drag(a, b, shift=False):
         if shift: page.keyboard.down('Shift')
         try:
-            page.mouse.move(*a); page.mouse.down(); page.mouse.move(*b, steps=12); page.mouse.up()
+            s = state()
+            target = next('overview-'+name for name in ('overview','scrollbar')
+                if s['controls'][name]['x'] <= a[0] <= s['controls'][name]['x']+s['controls'][name]['width']
+                and s['controls'][name]['y'] <= a[1] <= s['controls'][name]['y']+s['controls'][name]['height'])
+            def delivered(kind, after, point):
+                page.wait_for_function("p=>(window.chartSceneInputEvents||[]).some(e=>e.target===p.target&&e.kind===p.kind&&e.sequence>p.after&&Math.abs(e.x-p.x)<1&&Math.abs(e.y-p.y)<1)",
+                    arg={'target':target,'kind':kind,'after':after,'x':point[0],'y':point[1]})
+            page.mouse.move(*a)
+            before = page.evaluate('window.chartSceneInput?.sequence || 0')
+            page.mouse.down(); delivered('down', before, a)
+            page.mouse.move(*b, steps=12)
+            before = page.evaluate('window.chartSceneInput?.sequence || 0')
+            page.mouse.up(); delivered('up', before, b)
         finally:
             if shift: page.keyboard.up('Shift')
     def selection(a=.2, b=.5):
@@ -86,7 +99,7 @@ with sync_playwright() as playwright:
             (out/'results.json').write_text(json.dumps({'total':len(results),'failed':sum(not r['passed'] for r in results),'tests':results},indent=2))
             (out/'console.json').write_text(json.dumps(logs,indent=2))
     try:
-        page.goto(args.url+'?view=overview',wait_until='domcontentloaded')
+        page.goto(args.url+'?view=overview&inputTrace=1',wait_until='domcontentloaded')
         test('overview compiled Uno startup',lambda:ready('million'))
         if not state().get('ready'): raise RuntimeError('Overview did not render')
         def initial():
@@ -122,7 +135,7 @@ with sync_playwright() as playwright:
         test('overview Escape cancels active drag',cancel)
         def keyboard():
             page.mouse.click(*center()); before=state(); page.keyboard.press('ArrowRight'); wait_range_changed(before)
-            assert state()['min']>before['min']; near(state()['max']-state()['min'],before['max']-before['min'])
+            after=state(); assert after['min']>before['min']; near(after['max']-after['min'],before['max']-before['min'])
             page.keyboard.press('Control+z'); page.wait_for_function('v=>Math.abs(window.chartSceneOverview.min-v)<1e-6',arg=before['min'])
             page.keyboard.press('Home'); page.wait_for_function('''()=>{const s=window.chartSceneOverview;return s.min===s.fullMin&&s.max===s.fullMax}''')
         test('overview keyboard navigation fit and undo',keyboard)
@@ -145,7 +158,7 @@ with sync_playwright() as playwright:
             before=state(); click('flip'); page.wait_for_function('window.chartSceneOverview.flipped===true'); page.wait_for_timeout(300)
             assert state()['overview']['minimumX']>state()['overview']['maximumX']
             before=stable(); a=center(); drag(a,(a[0]+50,a[1])); wait_range_changed(before)
-            assert state()['min']<before['min']; near(state()['max']-state()['min'],before['max']-before['min'])
+            after=state(); assert after['min']<before['min']; near(after['max']-after['min'],before['max']-before['min'])
             click('flip'); page.wait_for_function('window.chartSceneOverview.flipped===false')
         test('overview flipped coordinates reverse screen direction',flipped)
         def replace():

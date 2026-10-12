@@ -43,9 +43,11 @@ public sealed class ChartLegend : UserControl, IDisposable
     public DataTemplate? ItemTemplate { get => (DataTemplate?)GetValue(ItemTemplateProperty); set => SetValue(ItemTemplateProperty, value); }
     /// <summary>Receives the RenderableSeries as its content/data context.</summary>
     public DataTemplate? MarkerTemplate { get => (DataTemplate?)GetValue(MarkerTemplateProperty); set => SetValue(MarkerTemplateProperty, value); }
-    public UndoManager? History { get; set; }
+    public static readonly DependencyProperty HistoryProperty = DependencyProperty.Register(nameof(History), typeof(UndoManager), typeof(ChartLegend), new PropertyMetadata(null));
+    public UndoManager? History { get => (UndoManager?)GetValue(HistoryProperty); set => SetValue(HistoryProperty, value); }
     public ReadOnlyObservableCollection<ChartLegendEntry> Entries => _source.Entries;
     public long RowCreationCount { get; private set; }
+    public int RetainedRowCount => _rows.Count;
     public long EntryCreationCount => _source.EntryCreationCount;
     public long MembershipPassCount => _source.MembershipPassCount;
     public FrameworkElement? ContainerFromEntry(ChartLegendEntry entry) => _rows.GetValueOrDefault(entry);
@@ -100,10 +102,16 @@ public sealed class ChartLegend : UserControl, IDisposable
             while (_pending)
             {
                 _pending = false;
-                var desired = _disposed || !_attached ? [] : Entries.ToArray();
+                var desired = _disposed || !_attached ? [] : Entries.Where(e => e.IsAttached).ToArray();
                 var retained = new HashSet<ChartLegendEntry>(desired);
                 foreach (var pair in _rows.ToArray())
-                    if (!retained.Contains(pair.Key)) { _rows.Remove(pair.Key); _items.Children.Remove(pair.Value); pair.Value.Detach(); }
+                    if (!retained.Contains(pair.Key))
+                    {
+                        _items.Children.Remove(pair.Value);
+                        // A filter only hides an observed entry. Keep its native controls
+                        // for the next filter change; actual removal/model replacement detaches it.
+                        if (!pair.Key.IsAttached) { _rows.Remove(pair.Key); pair.Value.Detach(); }
+                    }
                 for (int i = 0; i < desired.Length; i++)
                 {
                     var entry = desired[i];
@@ -189,7 +197,12 @@ public sealed class ChartLegend : UserControl, IDisposable
         private void Toggle(object sender, RoutedEventArgs args)
         { if (!_updating && !_detached) _owner.SetVisibility(_entry, _check!.IsChecked == true); }
         private void EntryChanged(object? sender, PropertyChangedEventArgs args)
-        { Refresh(); _owner.Updated?.Invoke(_owner, EventArgs.Empty); }
+        {
+            // A filtered row is not in Entries; removing its series may therefore emit no
+            // collection event. Release that detached native row immediately as well.
+            if (!_entry.IsAttached) _owner.SynchronizeRows();
+            Refresh(); _owner.Updated?.Invoke(_owner, EventArgs.Empty);
+        }
         public void Refresh()
         {
             if (_detached) return;

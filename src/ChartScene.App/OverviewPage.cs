@@ -4,9 +4,11 @@ using ChartScene.Charting;
 using ChartScene.Controls;
 using ChartScene.Core;
 using ChartScene.Data;
+using ChartScene.Rendering;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
 
@@ -16,6 +18,9 @@ namespace ChartScene.App;
 public sealed class OverviewPage : Page
 {
     private readonly ChartSurface _chart = new();
+    private readonly Grid _root = new();
+    private readonly Dictionary<string, ChartToolButton> _buttons = [];
+    private readonly ChartTheme _dark = ChartTheme.Dark with { Background = new(21,26,38), PlotBackground = new(25,42,65), Border = new(49,59,77) };
     private readonly ChartOverview _overview = new();
     private readonly ChartScrollbar _scrollbar = new() { Orientation = Orientation.Vertical };
     private readonly ComboBox _preset = new() { Width = 185, FontSize = 12 };
@@ -32,7 +37,7 @@ public sealed class OverviewPage : Page
     {
         RequestedTheme = ElementTheme.Dark;
         HorizontalContentAlignment = HorizontalAlignment.Stretch; VerticalContentAlignment = VerticalAlignment.Stretch;
-        var root = new Grid { Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 23, 28, 40)) };
+        var root = _root; root.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 21, 26, 38));
         root.RowDefinitions.Add(new() { Height = GridLength.Auto });
         root.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new() { Height = new GridLength(125) });
@@ -62,11 +67,18 @@ public sealed class OverviewPage : Page
     }
     private Button Button(string id, string text, Action action)
     {
-        var button = new Button { Content = text, FontSize = 12, MinHeight = 30 };
-        button.Click += (_, _) => action(); Register(id, button); return button;
+        var glyph = id switch { "fit" => ChartGlyph.Fit, "undo" => ChartGlyph.Undo, "redo" => ChartGlyph.Redo,
+            "flip" => ChartGlyph.Forward, "replace" => ChartGlyph.Home, "stream" => ChartGlyph.Play, _ => ChartGlyph.Settings };
+        var button = new ChartToolButton(glyph, text); button.Describe(text); _buttons.Add(id, button);
+        button.Click += (_, _) => { action(); Publish(); }; Register(id, button); return button;
     }
     private void Register(string id, FrameworkElement element)
-    { _controls[id] = element; AutomationProperties.SetAutomationId(element, "overview-" + id); }
+    {
+        _controls[id] = element; AutomationProperties.SetAutomationId(element, "overview-" + id);
+        UiInputTrace.Register(element, "overview-" + id);
+        // Observe the completed routed gesture, after the reusable control's input handlers.
+        element.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((_, _) => Publish()), true);
+    }
     private static double Signal(double t) => Math.Sin(t * 3) + .18 * Math.Cos(t * 31);
     private void LoadPreset(int index)
     {
@@ -76,7 +88,7 @@ public sealed class OverviewPage : Page
             _presetId = index switch { 1 => "logarithmic", 2 => "streaming", 3 => "heatmap", _ => "million" };
             _preset.SelectedIndex = index;
             var model = new ChartModel { Title = _preset.Items[index].ToString()!, Subtitle = "Drag the overview viewport or grips · Shift-drag a new interval · Full data remains unchanged", ShowLegend = false,
-                Theme = _light ? ChartTheme.Light : ChartTheme.Dark };
+                Theme = _light ? ChartTheme.Light : _dark };
             var series = CreateSource(index, _generation);
             model.RenderableSeries.Add(series);
             if (index == 1) model.XAxis.Scale = AxisScale.Logarithmic;
@@ -88,7 +100,7 @@ public sealed class OverviewPage : Page
             var previous = _model; _model = model; _chart.Model = model;
             _scrollbar.Axis = null; _scrollbar.FullRange = index == 3 ? new(0, 60) : new(-5, 5);
             _scrollbar.Axis = model.YAxis; _scrollbar.History = _chart.Controller.History; _scrollbar.Theme = model.Theme;
-            previous?.Dispose(); Publish();
+            previous?.Dispose(); ApplyChrome(); Publish();
         }
         finally { _changing = false; }
     }
@@ -125,8 +137,15 @@ public sealed class OverviewPage : Page
     {
         if (_model is null) return;
         _light = !_light; RequestedTheme = _light ? ElementTheme.Light : ElementTheme.Dark;
-        _model.Theme = _light ? ChartTheme.Light : ChartTheme.Dark; _scrollbar.Theme = _model.Theme;
-        _model.RenderableSeries[0].Stroke = _model.Theme.Palette[_generation % 2];
+        _model.Theme = _light ? ChartTheme.Light : _dark; _scrollbar.Theme = _model.Theme;
+        _model.RenderableSeries[0].Stroke = _model.Theme.Palette[_generation % 2]; ApplyChrome();
+    }
+    private void ApplyChrome()
+    {
+        var theme = _light ? ChartTheme.Light : _dark;
+        _root.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(theme.Background.A, theme.Background.R, theme.Background.G, theme.Background.B));
+        _status.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(theme.Muted.A, theme.Muted.R, theme.Muted.G, theme.Muted.B));
+        foreach (var button in _buttons.Values) button.ApplyTheme(theme);
     }
     private void ToggleStream()
     {
@@ -155,6 +174,8 @@ public sealed class OverviewPage : Page
     private void Publish()
     {
         if (!IsLoaded || _model is null) return;
+        _buttons["flip"].IsActive = _model.XAxis.FlippedCoordinates;
+        _buttons["stream"].IsActive = _streaming; _buttons["stream"].Glyph = _streaming ? ChartGlyph.Pause : ChartGlyph.Play;
         var error = _chart.LastError ?? _overview.LastError ?? _scrollbar.LastError;
         _status.Text = error ?? $"{_model.RenderableSeries[0].DataSeries?.Count ?? _model.RenderableSeries[0].HeatmapGrid?.Values.Length ?? 0:N0} source samples · Preview recordings {_overview.PreviewBuildCount} · Viewport and cursor moves reuse the miniature · {(_streaming ? "Streaming" : "Paused")}";
 #if __WASM__

@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using ChartScene.Charting;
 using ChartScene.Core;
 using ChartScene.Interaction;
@@ -31,7 +32,9 @@ public class ChartOverview : UserControl, IDisposable
         protected override void RenderOverride(SKCanvas canvas, Size area) => owner.Render(canvas, area);
         public void RequestRender() => Invalidate();
     }
-    private static DependencyProperty Property(string name, Type type, object? initial = null) =>
+    private static DependencyProperty Property(string name,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors |
+            DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)] Type type, object? initial = null) =>
         DependencyProperty.Register(name, type, typeof(ChartOverview), new PropertyMetadata(initial, (d, _) => ((ChartOverview)d).ConfigurationChanged()));
     public static readonly DependencyProperty ParentSurfaceProperty = Property(nameof(ParentSurface), typeof(ChartSurface));
     public static readonly DependencyProperty SourceProperty = Property(nameof(Source), typeof(RenderableSeries));
