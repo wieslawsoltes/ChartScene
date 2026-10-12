@@ -49,9 +49,9 @@ public static class ConditionalDataEditTests
             TestSuite.True(data.TryUpdateChannelValue(1, 1, 7, 70, data.Revision, out _));
             TestSuite.Near(data.Snapshot()[1, 1], 70);
             TestSuite.True(data.TryUpdateChannelValue(1, 0, 7, 10, data.Revision, out _));
-            TestSuite.True(!data.Snapshot().IsSorted);
+            TestSuite.True(!data.Snapshot().IsSortedAscending);
             TestSuite.True(data.TryUpdateChannelValue(1, 0, 10, 7, data.Revision, out _));
-            TestSuite.True(data.Snapshot().IsSorted);
+            TestSuite.True(data.Snapshot().IsSortedAscending);
         });
         suite.Run("conditional edit reports its own revision before reentrant mutation", () =>
         {
