@@ -37,3 +37,21 @@ Core coverage includes identity/lifecycle/filter invariants, reentrancy, a seede
 The complete workflow still requires both Uno targets, every original browser suite, no-input startup for every gallery, native GL/GLES fixtures, twelve packages and both isolated package-only consumers. These gates must pass on the final source revision before merge. Core test success alone does not establish native template or browser behavior.
 
 Dependency-property helper annotations are matched to Uno's trim contract rather than suppressing the warning; a 3D focus helper now ignores a detached XamlRoot. Physical-GPU benchmarks, broad browser/platform qualification, all reference templates, legend virtualization, complete document persistence and complete reference-pixel comparisons remain outside this change.
+
+## Filter recovery test correction
+
+Application run `38251041101` passed all existing browser suites and 18/20
+legend scenarios. Its empty-filter recovery failed before sending input: model
+state already listed the retained entries, but their reattached native checkbox
+bounds had not been laid out. The preserved screenshot and later state show all
+four controls present; the interrupted recovery left all series hidden, making
+the following test's initial-visible assumption fail as well.
+
+The legend test now observes a nonempty native checkbox rectangle before issuing
+a single acknowledged click. No application state, layout, thresholds or timeout
+limits are changed. Empty-to-all recovery runs three complete cycles, asserting
+that all series become visible again and both entry identities and row-creation
+counts remain unchanged. The reattachment test checks its starting visibility
+explicitly so a preceding incomplete scenario cannot produce a misleading undo
+failure. Final-head full CI remains required; these changes alone are not proof
+of a browser pass.
