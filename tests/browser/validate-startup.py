@@ -23,7 +23,7 @@ results, logs = [], []
 async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(args=['--enable-webgl','--ignore-gpu-blocklist','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
-        globals_by_view = {'2d':'chartScene', '3d':'chartScene3D', 'linked':'chartSceneLinked', 'colors':'chartSceneColors', 'overview':'chartSceneOverview', 'stacks':'chartSceneStacks', 'legends':'chartSceneLegends', 'editing':'chartSceneEditing'}
+        globals_by_view = {'2d':'chartScene', '3d':'chartScene3D', 'linked':'chartSceneLinked', 'colors':'chartSceneColors', 'overview':'chartSceneOverview', 'stacks':'chartSceneStacks', 'legends':'chartSceneLegends', 'editing':'chartSceneEditing', 'text':'chartSceneText'}
         base_cases = [(name, 0) for name in globals_by_view] + [('stacks',250), ('stacks',700)]
         cases = [(view,delay,attempt) for attempt in range(args.repeats) for view,delay in base_cases]
         try:
