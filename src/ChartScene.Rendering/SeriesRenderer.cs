@@ -340,15 +340,15 @@ public sealed partial class ChartRenderer
     }
     private static void DrawDataLabels(IChartCanvas c,ChartModel model,RenderableSeries s,SeriesSnapshot d,int[] indices,SeriesProjection p,StackedSeriesValues? stack)
     {
-        var occupied=new List<RectD>(); var provider=s.DataLabelProvider??new NumericDataLabelProvider();
+        var occupied=new LabelCollisionIndex(); var provider=s.DataLabelProvider??new NumericDataLabelProvider();
         foreach(int i in indices)
         {
             string? label=provider.GetLabel(s,d,i); if(string.IsNullOrEmpty(label)) continue;
             var point=p.ToScreen(d[0,i],stack is null?d[s.YChannel,i]:stack.Upper[i],d.ChannelCount>2?d[2,i]:0); if(!point.IsFinite||!p.Plot.Contains(point)) continue;
             var style=new TextStyle(model.Theme.Foreground,10); var metrics=c.MeasureText(label,style);
             var rect=new RectD(point.X-metrics.Width/2,point.Y-metrics.Height-7,metrics.Width,metrics.Height);
-            if(occupied.Any(r=>r.Intersects(rect.Inflate(2)))) continue;
-            occupied.Add(rect); c.DrawText(label,new(point.X,point.Y-7),style,TextAlignment.Center);
+            if(!occupied.TryAdd(rect)) continue;
+            c.DrawText(label,new(point.X,point.Y-7),style,TextAlignment.Center);
         }
     }
     internal static void DrawClippedPolyline(IChartCanvas c,IReadOnlyList<PointD> points,StrokeStyle stroke,RectD clip,bool closed=false)

@@ -21,7 +21,7 @@ using Windows.System;
 namespace ChartScene.App;
 
 /// <summary>Independent examples browser, using reusable chart controls and a bounded navigation journal.</summary>
-public sealed class MainPage : Page
+public sealed partial class MainPage : Page
 {
     private enum Document { Example, Source, Catalogue }
     private sealed record Location(string ExampleId, Document Document);
@@ -260,21 +260,6 @@ public sealed class MainPage : Page
         ScrollViewer.SetVerticalScrollBarVisibility(_source,ScrollBarVisibility.Auto);ScrollViewer.SetHorizontalScrollBarVisibility(_source,ScrollBarVisibility.Auto);
         Grid.SetRow(_source,1);_sourcePane.Children.Add(_source);Register("source-view",_source);_center.Children.Add(_sourcePane);
     }
-    private void BuildCatalogue()
-    {
-        var content=new StackPanel{Spacing=18,Padding=new Thickness(24)};
-        content.Children.Add(new TextBlock{Text="Chart examples",FontSize=28,FontWeight=Microsoft.UI.Text.FontWeights.SemiBold});
-        content.Children.Add(new TextBlock{Text="Explore scientific, financial and performance examples. Search also includes descriptions and source code.",FontSize=13,TextWrapping=TextWrapping.Wrap,Opacity=.75});
-        foreach(var example in SampleCatalog.Examples)
-        {
-            var button=new Button{Tag=example,HorizontalAlignment=HorizontalAlignment.Stretch,HorizontalContentAlignment=HorizontalAlignment.Left,Padding=new Thickness(12),Margin=new Thickness(0,0,8,8),MinHeight=68};
-            var layout=new Grid{ColumnSpacing=12};layout.ColumnDefinitions.Add(new(){Width=new GridLength(30)});layout.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
-            layout.Children.Add(new ChartIcon{Glyph=example.Category=="Financial"?ChartGlyph.Columns:example.Category=="Scientific"?ChartGlyph.Grid:ChartGlyph.Line,Width=26,Height=26});
-            var text=new StackPanel{Spacing=3};text.Children.Add(new TextBlock{Text=example.Title,FontSize=12,TextTrimming=TextTrimming.CharacterEllipsis});text.Children.Add(new TextBlock{Text=example.Category,FontSize=10,Opacity=.6});Grid.SetColumn(text,1);layout.Children.Add(text);button.Content=layout;
-            button.Click+=(_,_)=>OpenExample(example);AutomationProperties.SetName(button,example.Title);Register("tile:"+example.Id,button);_tiles.Children.Add(button);
-        }
-        content.Children.Add(_tiles);_catalogue=new ScrollViewer{Content=content,Visibility=Visibility.Collapsed,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};_center.Children.Add(_catalogue);
-    }
     private void BuildFooter()
     {
         var row=new Grid{Padding=new Thickness(10,0,8,0),ColumnSpacing=10};row.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});row.ColumnDefinitions.Add(new(){Width=new GridLength(120)});row.Children.Add(_status);
@@ -315,6 +300,7 @@ public sealed class MainPage : Page
     {
         if(!_journal.HasCurrent)return;
         var location=_journal.Current;
+        if(location.Document==Document.Catalogue&&!_cataloguePopulated)PopulateCatalogue(0);
         if(_model is null||_example.Id!=location.ExampleId)LoadExample(SampleCatalog.Find(location.ExampleId));
         if(location.Document!=Document.Example)PauseStream();
         if(location.Document==Document.Source&&!_sourceLoaded){_source.Text=ExampleSource.FactoryCode;_sourceLoaded=true;}
@@ -355,6 +341,7 @@ public sealed class MainPage : Page
             ColorRgba Convert(ColorRgba color){for(int i=0;i<previous.Palette.Count;i++)if((previous.Palette[i] with{A=color.A})==color)return next.Palette[i%next.Palette.Count].WithAlpha(color.A);return color;}
             foreach(var series in _model.RenderableSeries){series.Stroke=Convert(series.Stroke);series.Fill=Convert(series.Fill);series.StrokeY1=Convert(series.StrokeY1);series.FillY1=Convert(series.FillY1);}
         }
+        UpdateCatalogueTheme();
         RequestedTheme=_theme.SelectedIndex==1?ElementTheme.Light:ElementTheme.Dark;
         foreach(var panel in _panels){panel.Background=Brush(next.Background);panel.BorderBrush=Brush(next.Border);}
         foreach(var button in _buttons)button.ApplyTheme(next);
@@ -437,12 +424,12 @@ public sealed class MainPage : Page
         _inspectorColumn.Width=new GridLength(showInfo?Math.Min(285,width*.45):0);
         _controls["navigation-panel"].Visibility=_navigationOpen?Visibility.Visible:Visibility.Collapsed;
         _controls["inspector-panel"].Visibility=showInfo?Visibility.Visible:Visibility.Collapsed;_info.IsActive=showInfo;
-        int columns=Math.Clamp((int)Math.Max(1,(width-100)/250),1,5);
+        int columns=Math.Clamp((int)Math.Max(1,(width-100)/320),1,4);
         if(columns!=_tileColumns)
         {
             _tileColumns=columns;_tiles.ColumnDefinitions.Clear();_tiles.RowDefinitions.Clear();
             for(int i=0;i<columns;i++)_tiles.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
-            for(int i=0;i<(SampleCatalog.Examples.Count+columns-1)/columns;i++)_tiles.RowDefinitions.Add(new(){Height=GridLength.Auto});
+            for(int i=0;i<(_tiles.Children.Count+columns-1)/columns;i++)_tiles.RowDefinitions.Add(new(){Height=GridLength.Auto});
             for(int i=0;i<_tiles.Children.Count;i++){Grid.SetColumn(_tiles.Children[i],i%columns);Grid.SetRow(_tiles.Children[i],i/columns);}
         }
         PublishSnapshot();
@@ -469,6 +456,7 @@ public sealed class MainPage : Page
     {
         if(!IsLoaded||_model is null)return;
         var frame=_chart.LastFrame;
+        PublishCatalogue();
         PlatformBridge.Publish(new DiagnosticSnapshot
         {
             ready=frame is not null&&_chart.LastError is null,exampleId=_example.Id,theme=_model.Theme.Name,mode=_chart.Controller.Mode.ToString(),streaming=_streaming,
