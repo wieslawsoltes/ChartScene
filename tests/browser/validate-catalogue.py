@@ -32,7 +32,7 @@ with sync_playwright() as p:
     def preview(identifier):
         return next(p for p in state()['previews'] if p['id'] == identifier)
     def top():
-        page.mouse.move(900, 400); page.mouse.wheel(0, -5000)
+        page.mouse.move(min(900, page.viewport_size['width'] - 80), min(400, page.viewport_size['height'] / 2)); page.mouse.wheel(0, -5000)
         page.wait_for_timeout(250)
     def visible(identifier):
         for _ in range(15):
