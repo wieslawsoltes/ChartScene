@@ -144,3 +144,9 @@ MIT; see [LICENSE](LICENSE). Third-party dependencies retain their own licenses.
 ## Data integrity and stack performance review
 
 See [mutation, hit-testing and graphics review](docs/reviews/data-integrity-performance.md) and [shared stack generations and notification batching](docs/reviews/stack-cache-notifications.md). The **Stacked Data** gallery (`?view=stacks`) exercises atomic data updates, observable configuration and cache reuse through real Uno controls.
+
+## Real catalogue previews
+
+The home catalogue displays chart thumbnails generated from the same sample factories as the interactive charts. Previews are created only when needed, twelve per page. `ChartThumbnail` is reusable with a `Factory`, `Theme`, optional shared `ChartThumbnailCache`, and `ContentRevision` for changing factory output. The default shared cache retains at most 32 images and 8 MiB of pixel payload; created chart models are disposed after rendering.
+
+Data-label suppression now uses an exact spatial index instead of repeatedly scanning every accepted rectangle. See [catalogue and label-layout review](docs/reviews/catalogue-previews-labels.md) for ownership, performance evidence, tests and remaining compatibility boundaries.

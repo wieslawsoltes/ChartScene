@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Text.Json;
 using ChartScene.Core;
+using ChartScene.Charting;
+using ChartScene.Data;
 using ChartScene.Rendering;
 
 public static class LabelCollisionTests
@@ -71,6 +73,45 @@ public static class LabelCollisionTests
             TestSuite.True(!index.TryAdd(new(-double.MaxValue, -double.MaxValue, 0, 0), double.MaxValue));
             TestSuite.Equal(index.Count, 1);
         });
+        suite.Run("label finite inflation retains legacy rounding at cell boundaries", () =>
+        {
+            var index = new LabelCollisionIndex(); var scalar = new List<RectD>();
+            foreach (double origin in new[] { -1e15, -32.0, 0, 32, 1e15 })
+                foreach (double delta in new[] { 0, Math.BitIncrement(32.0), Math.BitDecrement(32.0), 32.0 })
+                {
+                    var r = new RectD(origin + delta, 0, 30, 1);
+                    bool accept = !scalar.Any(previous => previous.Intersects(r.Inflate(2)));
+                    TestSuite.Equal(index.TryAdd(r), accept);
+                    if (accept) scalar.Add(r);
+                }
+        });
+        suite.Run("rendered data-label identities match scalar layout oracle", () =>
+        {
+            using var model = new ChartModel { ShowLegend = false };
+            model.XAxis.VisibleRange = new(0, 100); model.YAxis.VisibleRange = new(-2, 2);
+            model.XAxis.AutoRange = model.YAxis.AutoRange = AutoRange.Never;
+            var data = new XyDataSeries();
+            data.AppendRange(Enumerable.Range(0, 2001).Select(i => i * .05).ToArray(),
+                Enumerable.Range(0, 2001).Select(i => Math.Sin(i * .12)).ToArray());
+            var provider = new Labels();
+            var series = new XyScatterRenderableSeries { DataSeries = data, ShowDataLabels = true, DataLabelProvider = provider };
+            model.RenderableSeries.Add(series);
+            var canvas = new RecordingCanvas(); var frame = new ChartRenderer().Render(canvas, model, 1000, 700);
+            var projection = frame.Layout.Projection(model, series); var snapshot = data.Snapshot();
+            var accepted = new List<RectD>(); var labels = new List<string>();
+            for (int i = 0; i < data.Count; i++)
+            {
+                var point = projection.ToScreen(snapshot[0, i], snapshot[1, i]); if (!projection.Plot.Contains(point)) continue;
+                string label = provider.GetLabel(series, snapshot, i);
+                var metrics = canvas.MeasureText(label, new(model.Theme.Foreground, 10));
+                var r = new RectD(point.X - metrics.Width / 2, point.Y - metrics.Height - 7, metrics.Width, metrics.Height);
+                if (accepted.Any(previous => previous.Intersects(r.Inflate(2)))) continue;
+                accepted.Add(r); labels.Add(label);
+            }
+            var actual = canvas.Commands.Where(c => c.Kind == "text" && c.Text?.StartsWith("point#", StringComparison.Ordinal) == true).Select(c => c.Text);
+            TestSuite.True(actual.SequenceEqual(labels));
+            TestSuite.True(labels.Count > 20);
+        });
         suite.Run("label layout work and timing evidence", () =>
         {
             const int count = 6000;
@@ -97,5 +138,9 @@ public static class LabelCollisionTests
             File.WriteAllText("artifacts/performance/label-collisions.json", JsonSerializer.Serialize(evidence, new JsonSerializerOptions { WriteIndented = true }));
             Console.WriteLine("PERF_LABELS " + JsonSerializer.Serialize(evidence));
         });
+    }
+    private sealed class Labels : IDataLabelProvider
+    {
+        public string GetLabel(RenderableSeries series, SeriesSnapshot data, int index) => "point#" + index;
     }
 }

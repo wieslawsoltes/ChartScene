@@ -9,7 +9,7 @@ class WorkbenchInput:
         'browser-back', 'browser-forward', 'browser-home', 'navigation-toggle', 'example-tab',
         'source-tab', 'export-png', 'export-csv', 'info-toggle', 'download-source', 'pan',
         'zoom-rectangle', 'home', 'select', 'annotate', 'undo', 'redo', 'zoom-in', 'zoom-out',
-        'play', 'apply-ranges',
+        'play', 'apply-ranges', 'catalogue-next', 'catalogue-previous',
     }
 
     def __init__(self, page, output: Path):

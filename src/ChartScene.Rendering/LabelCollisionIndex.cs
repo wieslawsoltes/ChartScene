@@ -31,11 +31,13 @@ public sealed class LabelCollisionIndex
         Validate(rectangle);
         if (!double.IsFinite(padding) || padding < 0) throw new ArgumentOutOfRangeException(nameof(padding));
         var query = rectangle.Inflate(padding);
-        bool Intersects(RectD occupied) => occupied.Right >= rectangle.X - padding
-            && occupied.X <= rectangle.Right + padding && occupied.Bottom >= rectangle.Y - padding
-            && occupied.Y <= rectangle.Bottom + padding;
-        // Overflowing padded bounds cover everything in their direction; test rectangles directly.
-        bool scan = !Finite(query);
+        bool finiteQuery = Finite(query);
+        bool Intersects(RectD occupied) => finiteQuery ? occupied.Intersects(query)
+            : occupied.Right >= rectangle.X - padding && occupied.X <= rectangle.Right + padding
+                && occupied.Bottom >= rectangle.Y - padding && occupied.Y <= rectangle.Bottom + padding;
+        // Preserve the exact legacy inflation arithmetic for finite bounds. Overflowing
+        // padded bounds use endpoint comparisons, avoiding infinity-minus-infinity NaN.
+        bool scan = !finiteQuery;
         var q = scan ? default : Window(query);
         if (scan || Exceeds(q, QueryBudget))
         {
