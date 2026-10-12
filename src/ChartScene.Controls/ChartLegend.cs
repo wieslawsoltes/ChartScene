@@ -47,6 +47,10 @@ public sealed class ChartLegend : UserControl, IDisposable
     public UndoManager? History { get => (UndoManager?)GetValue(HistoryProperty); set => SetValue(HistoryProperty, value); }
     public ReadOnlyObservableCollection<ChartLegendEntry> Entries => _source.Entries;
     public long RowCreationCount { get; private set; }
+    /// <summary>Completed native row synchronization passes, not individual collection events.</summary>
+    public long RowSynchronizationCount { get; private set; }
+    /// <summary>Explicit vector-marker invalidations; excludes host composition and initial loading.</summary>
+    public long MarkerInvalidationCount { get; private set; }
     public int RetainedRowCount => _rows.Count;
     public long EntryCreationCount => _source.EntryCreationCount;
     public long MembershipPassCount => _source.MembershipPassCount;
@@ -58,18 +62,24 @@ public sealed class ChartLegend : UserControl, IDisposable
     private readonly Dictionary<ChartLegendEntry, Row> _rows = [];
     private ChartSurface? _parent;
     private long _parentToken;
-    private bool _attached, _disposed, _syncing, _pending;
+    private bool _attached, _disposed, _syncing, _pending, _refreshingRows;
     public ChartLegend()
     {
         Content = _items; FontSize = 12;
         HorizontalContentAlignment = HorizontalAlignment.Stretch;
-        ((INotifyCollectionChanged)_source.Entries).CollectionChanged += EntriesChanged;
+        // Entries still expose granular events to external ItemsControls. Our native
+        // tree only needs one update after the source has completed the whole projection.
+        _source.Refreshed += EntriesRefreshed;
         _source.PropertyChanged += SourceChanged;
         Loaded += (_, _) => { if (_disposed) return; _attached = true; Refresh(); };
         Unloaded += (_, _) => { _attached = false; Detach(); };
         RegisterPropertyChangedCallback(FontSizeProperty, (_, _) => RefreshRows());
         RegisterPropertyChangedCallback(FontFamilyProperty, (_, _) => RefreshRows());
         RegisterPropertyChangedCallback(FontWeightProperty, (_, _) => RefreshRows());
+        RegisterPropertyChangedCallback(FontStyleProperty, (_, _) => RefreshRows());
+        RegisterPropertyChangedCallback(FontStretchProperty, (_, _) => RefreshRows());
+        RegisterPropertyChangedCallback(CharacterSpacingProperty, (_, _) => RefreshRows());
+        RegisterPropertyChangedCallback(ForegroundProperty, (_, _) => RefreshRows());
     }
     private static void Changed(DependencyObject sender, DependencyPropertyChangedEventArgs args) => ((ChartLegend)sender).Refresh();
     private static void TemplateChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
@@ -89,19 +99,19 @@ public sealed class ChartLegend : UserControl, IDisposable
         _source.SourceMode = SourceMode; _source.Model = Model ?? _parent?.Model;
         SynchronizeRows(); RefreshRows();
     }
-    private void EntriesChanged(object? sender, NotifyCollectionChangedEventArgs args) => SynchronizeRows();
+    private void EntriesRefreshed(object? sender, EventArgs args) => SynchronizeRows();
     private void SourceChanged(object? sender, PropertyChangedEventArgs args)
     { if (args.PropertyName == nameof(ChartLegendSource.Theme)) RefreshRows(); }
     private void SynchronizeRows()
     {
         _pending = true;
-        if (_syncing) return;
+        if (_syncing || _source.IsRefreshing) return;
         _syncing = true;
         try
         {
             while (_pending)
             {
-                _pending = false;
+                _pending = false; RowSynchronizationCount++;
                 var desired = _disposed || !_attached ? [] : Entries.Where(e => e.IsAttached).ToArray();
                 var retained = new HashSet<ChartLegendEntry>(desired);
                 foreach (var pair in _rows.ToArray())
@@ -112,6 +122,7 @@ public sealed class ChartLegend : UserControl, IDisposable
                         // for the next filter change; actual removal/model replacement detaches it.
                         if (!pair.Key.IsAttached) { _rows.Remove(pair.Key); pair.Value.Detach(); }
                     }
+                var existingRows = new HashSet<UIElement>(_items.Children);
                 for (int i = 0; i < desired.Length; i++)
                 {
                     var entry = desired[i];
@@ -119,8 +130,8 @@ public sealed class ChartLegend : UserControl, IDisposable
                     {
                         _rows.Add(entry, row = new(this, entry)); RowCreationCount++;
                     }
-                    int existing = _items.Children.IndexOf(row);
-                    if (existing == i) continue;
+                    if (i < _items.Children.Count && ReferenceEquals(_items.Children[i], row)) continue;
+                    int existing = existingRows.Contains(row) ? _items.Children.IndexOf(row) : -1;
                     if (existing >= 0) _items.Children.RemoveAt(existing);
                     _items.Children.Insert(i, row);
                 }
@@ -131,8 +142,16 @@ public sealed class ChartLegend : UserControl, IDisposable
     }
     private void RefreshRows()
     {
-        if (_disposed) return;
-        foreach (var row in _rows.Values) row.Refresh();
+        if (_disposed || _refreshingRows) return;
+        _refreshingRows = true;
+        try
+        {
+            var background = _source.Theme.Background;
+            RequestedTheme = background.R * 299 + background.G * 587 + background.B * 114 >= 128000
+                ? ElementTheme.Light : ElementTheme.Dark;
+            foreach (var row in _rows.Values) row.Refresh();
+        }
+        finally { _refreshingRows = false; }
         Updated?.Invoke(this, EventArgs.Empty);
     }
     /// <summary>Applies a user edit through shared history. Detached or filtered-out entries are ignored.</summary>
@@ -158,6 +177,12 @@ public sealed class ChartLegend : UserControl, IDisposable
             LegendMarkerRenderer.Draw(new SkiaChartCanvas(canvas, _resources), series, new(0, 0, area.Width, area.Height));
         }
     }
+    private readonly record struct MarkerStyle(SeriesKind Kind, ColorRgba Stroke, ColorRgba Fill,
+        double Opacity, double Thickness, double Size, PointMarker Marker, ColorMap Map)
+    {
+        public static MarkerStyle Capture(RenderableSeries s) => new(s.Kind, s.Stroke, s.Fill,
+            s.Opacity, s.StrokeThickness, s.MarkerSize, s.PointMarker, s.ColorMap);
+    }
     private sealed class Row : Grid
     {
         private readonly ChartLegend _owner;
@@ -168,6 +193,7 @@ public sealed class ChartLegend : UserControl, IDisposable
         private readonly Marker? _marker;
         private readonly ContentPresenter? _custom;
         private bool _updating, _detached;
+        private MarkerStyle? _markerStyle;
         public Row(ChartLegend owner, ChartLegendEntry entry)
         {
             _owner = owner; _entry = entry; MinHeight = 28; DataContext = entry;
@@ -200,7 +226,11 @@ public sealed class ChartLegend : UserControl, IDisposable
         {
             // A filtered row is not in Entries; removing its series may therefore emit no
             // collection event. Release that detached native row immediately as well.
-            if (!_entry.IsAttached) _owner.SynchronizeRows();
+            if (!_entry.IsAttached)
+            {
+                _owner.SynchronizeRows();
+                if (_owner._source.IsRefreshing) return;
+            }
             Refresh(); _owner.Updated?.Invoke(_owner, EventArgs.Empty);
         }
         public void Refresh()
@@ -222,10 +252,21 @@ public sealed class ChartLegend : UserControl, IDisposable
                 {
                     _label.Text = _entry.SeriesName; _label.FontSize = _owner.FontSize;
                     _label.FontFamily = _owner.FontFamily; _label.FontWeight = _owner.FontWeight;
-                    _label.Foreground = Brush(_entry.IsVisible ? theme.Foreground : theme.Muted);
+                    _label.FontStyle = _owner.FontStyle; _label.FontStretch = _owner.FontStretch;
+                    _label.CharacterSpacing = _owner.CharacterSpacing;
+                    // Use the normal inherited/local/style brush rather than replacing
+                    // consumer styling with a hard-coded chart theme color.
+                    _label.Foreground = _owner.Foreground; _label.Opacity = _entry.IsVisible ? 1 : .55;
                 }
                 if (_markerHost is not null) _markerHost.Visibility = _owner.ShowSeriesMarkers ? Visibility.Visible : Visibility.Collapsed;
-                _marker?.Redraw();
+                if (_marker is not null)
+                {
+                    var style = MarkerStyle.Capture(_entry.Series);
+                    if (_markerStyle != style)
+                    {
+                        _markerStyle = style; _owner.MarkerInvalidationCount++; _marker.Redraw();
+                    }
+                }
             }
             finally { _updating = false; }
         }
@@ -249,6 +290,7 @@ public sealed class ChartLegend : UserControl, IDisposable
     {
         if (_disposed) return; _disposed = true; _attached = false;
         UnsubscribeParent(); _source.Dispose(); ClearRows();
+        _source.Refreshed -= EntriesRefreshed; _source.PropertyChanged -= SourceChanged; Updated = null;
         ClearValue(ModelProperty); ClearValue(ParentSurfaceProperty); History = null; base.Dispose();
     }
 }

@@ -53,6 +53,10 @@ public sealed class ChartLegendSource : ObservableObject, IDisposable
     public ReadOnlyObservableCollection<ChartLegendEntry> Entries { get; }
     public long EntryCreationCount { get; private set; }
     public long MembershipPassCount { get; private set; }
+    /// <summary>True while membership notifications belong to an unfinished reconciliation.</summary>
+    public bool IsRefreshing => _updating;
+    /// <summary>One notification after membership and any reentrant edits have settled.</summary>
+    public event EventHandler? Refreshed;
     public ChartTheme Theme => _model?.Theme ?? ChartTheme.Dark;
     public ChartModel? Model
     {
@@ -118,6 +122,7 @@ public sealed class ChartLegendSource : ObservableObject, IDisposable
         _updating = true;
         try { while (_pending) { _pending = false; ReconcileCore(); } }
         finally { _updating = false; }
+        Refreshed?.Invoke(this, EventArgs.Empty);
     }
     private void ReconcileCore()
     {
@@ -138,6 +143,15 @@ public sealed class ChartLegendSource : ObservableObject, IDisposable
             _observed.Add(item, new(item, ++EntryCreationCount)); item.PropertyChanged += SeriesChanged;
         }
         var desired = series.Where(Includes).Select(item => _observed[item]).ToArray();
+        // Remove absent entries before aligning survivors. Removing the first row must
+        // emit one Remove, not Move for every surviving row followed by a trailing Remove.
+        var desiredEntries = new HashSet<ChartLegendEntry>(desired);
+        for (int i = _entries.Count - 1; i >= 0; i--)
+        {
+            if (desiredEntries.Contains(_entries[i])) continue;
+            _entries.RemoveAt(i);
+            if (_pending) return;
+        }
         // Avoid repeated linear misses when a large set of new series is first bound.
         var existingEntries = new HashSet<ChartLegendEntry>(_entries);
         for (int i = 0; i < desired.Length; i++)

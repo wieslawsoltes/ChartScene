@@ -183,6 +183,31 @@ with sync_playwright() as p:
             c=state()['controls']['chart'];l=state()['controls']['legend'];assert c['width']>400 and l['x']+l['width']<=920
             pixels('legend-compact');page.set_viewport_size({'width':1440,'height':1000})
         test('legend responsive sidebar keeps chart and rows reachable',resize)
+        def typography():
+            before=state(); identity=identities(); width=before['controls']['legend']['width']
+            command('text')
+            page.wait_for_function("""width => {
+                const s=window.chartSceneLegends,t=s.typography;
+                return t?.fontSize===18 && t.fontWeight===700 && t.fontStyle==='Italic'
+                    && t.foreground==='#FFF09B4B' && s.controls.legend.width>width;
+            }""",arg=width)
+            after=state(); assert identities()==identity and after['rowsCreated']==before['rowsCreated']
+            assert after['membershipPasses']==before['membershipPasses']
+            assert after['markerInvalidations']==before['markerInvalidations']
+            page.screenshot(path=str(out/'legend-typography.png'))
+            command('text')
+            page.wait_for_function("window.chartSceneLegends.typography?.fontSize===12 && window.chartSceneLegends.typography.fontStyle==='Normal' && window.chartSceneLegends.typography.fontWeight===400")
+        test('legend fonts and foreground style native text without marker invalidation',typography)
+        def large():
+            before=state(); command('many')
+            page.wait_for_function('window.chartSceneLegends.entries.length===256 && window.chartSceneLegends.ready')
+            after=state()
+            assert after['rowsCreated']-before['rowsCreated']==256
+            assert after['rowSynchronizations']-before['rowSynchronizations']<=2, (before,after)
+            assert after['retainedRows']==256
+            page.screenshot(path=str(out/'legend-256-channels.png'))
+            command('many'); assert len(entries())==4 and state()['retainedRows']==4
+        test('large legend binding synchronizes native rows once per settled projection',large)
         def clean():assert not [e for e in logs if e['type']=='pageerror'],logs
         test('legend gallery has no unhandled errors',clean)
         (out/'final-state.json').write_text(json.dumps(state(),indent=2))
