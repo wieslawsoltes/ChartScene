@@ -15,7 +15,7 @@ public sealed partial class ChartRenderer
     public ChartFrame Render(IChartCanvas target,ChartModel model,double width,double height,ChartViewState? view=null,PlotMargins minimumMargins=default)
     {
         BeginResamplingFrame();
-        var timer=Stopwatch.StartNew(); var canvas=new CountingCanvas(target); _renderedPoints=0; _hits.Clear(); _legend.Clear();
+        var timer=Stopwatch.StartNew(); var canvas=new CountingCanvas(target); _renderedPoints=0; _hits.Clear(); _legend.Clear(); _annotationTexts.Clear();
         canvas.Clear(model.Theme.Background);
         var errors=model.Validate();
         if(errors.Count>0)
@@ -45,7 +45,7 @@ public sealed partial class ChartRenderer
         if(model.ShowLegend) DrawLegend(canvas,model,layout);
         if(view is not null) DrawInteraction(canvas,model,layout,view);
         long source=model.RenderableSeries.Where(s=>s.IsVisible).Sum(s=>(long)(s.DataSeries?.Count??(s.HeatmapGrid is { } g?g.Width*g.Height:0)));
-        return new(layout,new(source,_renderedPoints,canvas.Commands,timer.Elapsed.TotalMilliseconds,model.Revision),_hits.ToArray(),_legend.ToArray(),[]);
+        return new(layout,new(source,_renderedPoints,canvas.Commands,timer.Elapsed.TotalMilliseconds,model.Revision),_hits.ToArray(),_legend.ToArray(),[]){TextAnnotations=Array.AsReadOnly(_annotationTexts.ToArray())};
     }
     private static void DrawBackground(IChartCanvas c,ChartModel m,ChartLayout l)
     {

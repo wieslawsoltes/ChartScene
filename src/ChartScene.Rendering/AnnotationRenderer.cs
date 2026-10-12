@@ -33,8 +33,15 @@ public static class AnnotationGeometry
         if(annotation.Kind==AnnotationKind.VerticalLine) { a=new(a.X,plot.Y); b=new(a.X,plot.Bottom); }
         return(a,b);
     }
-    public static double HitDistance(ChartModel model,ChartAnnotation a,RectD plot,PointD point)
+    public static double HitDistance(ChartModel model,ChartAnnotation a,RectD plot,PointD point,ChartFrame? frame=null)
     {
+        if(a.Kind==AnnotationKind.Text && frame is not null)
+        {
+            if(frame.Statistics.ModelRevision!=model.Revision)return double.PositiveInfinity;
+            foreach(var region in frame.TextAnnotations)
+                if(ReferenceEquals(region.Annotation,a)) return region.Layout.HitDistance(point);
+            return double.PositiveInfinity;
+        }
         var(p1,p2)=Endpoints(model,a,plot);
         if(!p1.IsFinite||!p2.IsFinite) return double.PositiveInfinity;
         if(a.Kind==AnnotationKind.Box)
@@ -56,10 +63,22 @@ public static class AnnotationGeometry
 
 public sealed partial class ChartRenderer
 {
-    private static void DrawAnnotations(IChartCanvas c,ChartModel model,ChartLayout layout,AnnotationLayer layer)
+    private void DrawAnnotations(IChartCanvas c,ChartModel model,ChartLayout layout,AnnotationLayer layer)
     {
         foreach(var annotation in model.Annotations.Where(a=>a.IsVisible&&a.Layer==layer))
         {
+            if(annotation.Kind==AnnotationKind.Text)
+            {
+                var text=TextAnnotationLayout.Measure(c,model,annotation,layout.PlotArea,layout.Bounds);
+                if(text is not null)
+                {
+                    _annotationTexts.Add(new(annotation,text));
+                    c.Save();
+                    try { c.Clip(text.Clip); text.Draw(c,annotation.IsSelected&&annotation.IsEditable,model.Theme.Background); }
+                    finally { c.Restore(); }
+                }
+                continue;
+            }
             var(a,b)=AnnotationGeometry.Endpoints(model,annotation,layout.PlotArea);
             if(!a.IsFinite||!b.IsFinite) continue;
             var clip=annotation.ClipToPlot?layout.PlotArea:layout.Bounds;

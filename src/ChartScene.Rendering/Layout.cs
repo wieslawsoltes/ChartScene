@@ -8,7 +8,11 @@ public sealed record LegendItem(RenderableSeries Series,RectD Bounds);
 public sealed record HitRegion(RenderableSeries Series,int DataIndex,RectD Bounds,PointD Position,double Radius=0);
 public sealed record SeriesHit(RenderableSeries Series,int DataIndex,double X,double Y,PointD Position,double Distance,string? Details=null);
 public sealed record RenderStatistics(long SourcePoints,long RenderedPoints,int DrawingCommands,double CpuMilliseconds,long ModelRevision);
-public sealed record ChartFrame(ChartLayout Layout,RenderStatistics Statistics,IReadOnlyList<HitRegion> HitRegions,IReadOnlyList<LegendItem> LegendItems,IReadOnlyList<string> Diagnostics);
+public sealed record ChartFrame(ChartLayout Layout,RenderStatistics Statistics,IReadOnlyList<HitRegion> HitRegions,IReadOnlyList<LegendItem> LegendItems,IReadOnlyList<string> Diagnostics)
+{
+    /// <summary>Measured text geometry belonging to this rendered frame, including its actual font metrics.</summary>
+    public IReadOnlyList<AnnotationTextRegion> TextAnnotations { get; init; } = [];
+}
 public sealed class ChartViewState
 {
     public PointD? Cursor { get; set; }
