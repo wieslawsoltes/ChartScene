@@ -4,8 +4,38 @@ using ChartScene.Data;
 
 public static class ConditionalDataEditTests
 {
+    private sealed class ReentrantValidationData : DataSeries
+    {
+        public Action? ValidateOnce { get; set; }
+        protected override void ValidateRow(ReadOnlySpan<double> values)
+        {
+            var callback = ValidateOnce; ValidateOnce = null; callback?.Invoke();
+        }
+    }
     public static void Register(TestSuite suite)
     {
+        foreach (string operation in new[] { "replace", "clear", "update" })
+            suite.Run("conditional row validation cannot overwrite a reentrant " + operation, () =>
+            {
+                var data = new ReentrantValidationData(); data.Append(1, 2);
+                long expected = data.Revision; int notifications = 0;
+                data.DataSeriesChanged += (_, _) => notifications++;
+                data.ValidateOnce = () =>
+                {
+                    if (operation == "clear") data.Clear();
+                    else if (operation == "replace") data.ReplaceAll([5], [8]);
+                    else data.Update(0, 1, 9);
+                };
+                TestSuite.True(!data.TryUpdateChannelValue(0, 1, 2, 3, expected, out long actual));
+                TestSuite.Equal(actual, expected + 1); TestSuite.Equal(data.Revision, expected + 1);
+                TestSuite.Equal(notifications, 1);
+                if (operation == "clear") TestSuite.Equal(data.Count, 0);
+                else
+                {
+                    TestSuite.Near(data.Snapshot()[0, 0], operation == "replace" ? 5 : 1);
+                    TestSuite.Near(data.Snapshot()[1, 0], operation == "replace" ? 8 : 9);
+                }
+            });
         suite.Run("conditional point edits preserve all other values and old snapshots", () =>
         {
             var data = new XyDataSeries(); data.AppendRange([1, 2, 3], [4, 5, 6]);

@@ -159,6 +159,10 @@ public class DataSeries : IDataSeries
             Span<double> row = ChannelCount <= 64 ? stackalloc double[ChannelCount] : new double[ChannelCount];
             for (int c = 0; c < ChannelCount; c++) row[c] = Read(c, index);
             row[channel] = value; ValidatePoint(row);
+            // A derived validator can reenter storage on this thread despite the lock.
+            // Its replacement/clear/update supersedes this attempt just like a stale
+            // concurrent generation; do not write into the newly published row or ring.
+            if (_revision != expectedRevision) { appliedRevision = _revision; return false; }
             if (channel == 0) ValidateReplacementOrder(index, value, value, 1);
             int removed = channel == 0 ? CountEdges(index, index + 1) : 0;
             _columns[channel][Physical(index)] = value;
