@@ -27,6 +27,7 @@ public sealed class ChartController:IDisposable
 {
     private IChartModifier? _captured;
     private int _capturePointer;
+    private long _cancellationVersion;
     private readonly Dictionary<int,PointD> _touches=[];
     private ViewportSnapshot? _pinchBefore;
     private PointD _pinchCenter;
@@ -82,7 +83,9 @@ public sealed class ChartController:IDisposable
             }
             if(input.Kind==ChartInputKind.Up) _touches.Remove(input.PointerId);
         }
-        if(input.Kind==ChartInputKind.Move)
+        // A captured editor supplies its original-point overlay. A redundant rollover
+        // would overwrite it and recreate changed source snapshots before rendering.
+        if(input.Kind==ChartInputKind.Move && _captured is not IChartCursorOwner { OwnsCursor: true })
         {
             View.Cursor=input.Position;
             View.Hits=HitTester.Query(Model,input.Position,10,nearestX:true,interpolate:InterpolateRollover);
@@ -95,8 +98,16 @@ public sealed class ChartController:IDisposable
         }
         foreach(var modifier in Modifiers.Where(m=>m.IsEnabled))
         {
+            long cancellationVersion=_cancellationVersion;
             var result=modifier.Handle(this,input);
-            if(result==ModifierResult.Capture) { _captured=modifier; _capturePointer=input.PointerId; }
+            if(result==ModifierResult.Capture)
+            {
+                // A modifier can publish a start notification before this assignment.
+                // Respect Cancel/Dispose called by that notification, including releasing
+                // the modifier's not-yet-captured state rather than reviving its gesture.
+                if(cancellationVersion!=_cancellationVersion) modifier.Cancel(this);
+                else { _captured=modifier; _capturePointer=input.PointerId; }
+            }
             if(result!=ModifierResult.Unhandled) { NotifyViewChanged(); return true; }
         }
         if(input.Kind==ChartInputKind.Move) NotifyViewChanged();
@@ -105,6 +116,7 @@ public sealed class ChartController:IDisposable
     public void PointerExited() { if(HasCapture) return; View.Cursor=null; View.Hits=[]; NotifyViewChanged(); }
     public void Cancel()
     {
+        _cancellationVersion++;
         _captured?.Cancel(this); _captured=null;
         _pinchBefore?.Restore(); _pinchBefore=null; _touches.Clear(); View.RubberBand=null; NotifyViewChanged();
     }

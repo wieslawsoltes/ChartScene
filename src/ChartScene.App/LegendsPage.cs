@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using ChartScene.Charting;
 using ChartScene.Controls;
 using ChartScene.Core;
+using ChartScene.Interaction;
 using ChartScene.Data;
 using ChartScene.Rendering;
 using Microsoft.UI.Xaml;
@@ -26,6 +27,7 @@ public sealed class LegendsPage : Page
     private readonly TextBlock _status = new() { FontSize = 11, Margin = new Thickness(12, 6, 12, 6), TextWrapping = TextWrapping.Wrap };
     private readonly Dictionary<string, FrameworkElement> _controls = [];
     private readonly Dictionary<string, ChartToolButton> _buttons = [];
+    private UndoManager? _observedHistory;
     private readonly DispatcherTimer _diagnostics = new() { Interval = TimeSpan.FromMilliseconds(200) };
     private readonly LegendTemplates _templates = new();
     private ChartModel? _model, _previous;
@@ -86,15 +88,28 @@ public sealed class LegendsPage : Page
         Grid.SetRow(_status, 3); _root.Children.Add(_status); Content = _root;
         Register("chart", _chart); Register("legend", _legendHost);
         _chart.RenderCompleted += (_, _) => Publish(); _legend.Updated += (_, _) => Publish();
-        _diagnostics.Tick += (_, _) => { UpdateCommands(); Publish(); };
-        Loaded += (_, _) => { if (_model is null) LoadModel(); PlaceLegend(); ApplyTheme(); _diagnostics.Start(); };
-        Unloaded += (_, _) => _diagnostics.Stop();
+        _diagnostics.Tick += (_, _) => Publish();
+        Loaded += (_, _) => { if (_model is null) LoadModel(); PlaceLegend(); ApplyTheme(); ObserveHistory(); _diagnostics.Start(); };
+        Unloaded += (_, _) => { _diagnostics.Stop(); ObserveHistory(detach: true); };
         SizeChanged += (_, _) => { PlaceLegend(); Publish(); };
     }
     private RenderableSeries Find(string id) => _model!.RenderableSeries.First(s => s.Id == id);
+    private void ObserveHistory(bool detach = false)
+    {
+        var next = !detach && IsLoaded && _model is not null ? _chart.Controller.History : null;
+        if (ReferenceEquals(next, _observedHistory)) return;
+        if (_observedHistory is not null) _observedHistory.Changed -= HistoryChanged;
+        _observedHistory = next;
+        if (next is not null) next.Changed += HistoryChanged;
+    }
+    private void HistoryChanged(object? sender, EventArgs args)
+    {
+        if (!IsLoaded || !ReferenceEquals(sender, _observedHistory)) return;
+        UpdateCommands(); Publish();
+    }
     private void Register(string id, FrameworkElement element)
     { _controls[id] = element; AutomationProperties.SetAutomationId(element, "legends-" + id); UiInputTrace.Register(element, "legends-" + id); }
-    private static SolidColorBrush Brush(ColorRgba c) => new(Windows.UI.Color.FromArgb(c.A, c.R, c.G, c.B));
+    private static SolidColorBrush Brush(ColorRgba color) => new(Windows.UI.Color.FromArgb(color.A, color.R, color.G, color.B));
     private void PlaceLegend()
     {
         bool horizontal = _placement is 1 or 3;
@@ -131,7 +146,7 @@ public sealed class LegendsPage : Page
         model.XAxis.AutoRange = model.YAxis.AutoRange = AutoRange.Never;
         model.XAxis.AxisTitle = "Time (s)"; model.YAxis.AxisTitle = "Amplitude";
         _previous?.Dispose(); _previous = _model; _model = model; _chart.Model = model;
-        _optional = model.RenderableSeries[^1]; UpdateCommands(); ApplyTheme();
+        _optional = model.RenderableSeries[^1]; ObserveHistory(); UpdateCommands(); ApplyTheme();
     }
     private static double Signal(double x, int series) => series switch { 1 => Math.Cos(x * 1.4), 2 => .5 * Math.Sin(x * .6) + .2, 3 => Math.Sin(x * 1.4) * .8 - .4, _ => Math.Sin(x * 1.4) };
     private void ChangeStyle()
@@ -225,7 +240,7 @@ public sealed class LegendsPage : Page
             _legend.RowSynchronizationCount, _legend.MarkerInvalidationCount, Typography(),
             _legend.Entries.Select(e => new LegendEntrySnapshot(e.Identity, e.Series.Id, e.SeriesName, e.IsVisible, Bounds(_legend.ContainerFromEntry(e)), Bounds(Checkbox(_legend.ContainerFromEntry(e))))).ToArray(),
             _model.RenderableSeries.Select(s => new LegendSeriesSnapshot(s.Id, s.SeriesName, s.IsVisible, s.IncludeInLegend, s.IsSelected, s.DataSeries?.Count ?? 0)).ToArray(),
-            _controls.ToDictionary(p => p.Key, p => Bounds(p.Value)));
+            _controls.ToDictionary(p => p.Key, p => Bounds(p.Value)), _buttons["undo"].IsEnabled, _buttons["redo"].IsEnabled);
         Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.chartSceneLegends=" + JsonSerializer.Serialize(state, LegendsJsonContext.Default.LegendsSnapshot));
 #endif
     }
@@ -235,7 +250,7 @@ public sealed record LegendSeriesSnapshot(string id, string name, bool visible, 
 public sealed record LegendsSnapshot(bool ready, string? error, int generation, int appends, int oldEdits, string placement, string filter, string theme,
     bool checkboxes, bool markers, bool rowTemplate, bool markerTemplate, long rowsCreated, long entriesCreated, long membershipPasses, bool canUndo, bool canRedo, long frames, long actions, string lastAction, int retainedRows,
     long rowSynchronizations, long markerInvalidations, LegendTypographySnapshot? typography,
-    LegendEntrySnapshot[] entries, LegendSeriesSnapshot[] series, Dictionary<string, ControlBounds?> controls);
+    LegendEntrySnapshot[] entries, LegendSeriesSnapshot[] series, Dictionary<string, ControlBounds?> controls, bool undoEnabled, bool redoEnabled);
 public sealed record LegendTypographySnapshot(double fontSize, string fontStyle, int fontWeight, string? foreground);
 [JsonSerializable(typeof(LegendsSnapshot))]
 public partial class LegendsJsonContext : JsonSerializerContext;

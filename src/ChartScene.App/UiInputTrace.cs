@@ -28,6 +28,11 @@ internal static class UiInputTrace
         element.AddHandler(UIElement.PointerMovedEvent,new PointerEventHandler((_,e)=>Publish(registration.Id,"move",e)),true);
         element.AddHandler(UIElement.PointerPressedEvent,new PointerEventHandler((_,e)=>Publish(registration.Id,"down",e)),true);
         element.AddHandler(UIElement.PointerReleasedEvent,new PointerEventHandler((_,e)=>Publish(registration.Id,"up",e)),true);
+        element.AddHandler(UIElement.DoubleTappedEvent, new DoubleTappedEventHandler((_, e) =>
+        {
+            var point = e.GetPosition(null);
+            PublishTrace(new(registration.Id, "doubletap", point.X, point.Y));
+        }), true);
         // Read current focus after routed notifications finish. No focus redirection, keys,
         // typed text, clipboard content or application-state mutation is recorded.
         element.GotFocus+=(_,_)=>element.DispatcherQueue.TryEnqueue(()=>PublishFocus(element));
@@ -51,6 +56,10 @@ internal static class UiInputTrace
     private static void Publish(string id,string kind,PointerRoutedEventArgs e)
     {
         var point=e.GetCurrentPoint(null).Position;var trace=new UiPointerTrace(id,kind,point.X,point.Y);
+        PublishTrace(trace);
+    }
+    private static void PublishTrace(UiPointerTrace trace)
+    {
         string json=JsonSerializer.Serialize(trace,UiInputJsonContext.Default.UiPointerTrace);
         Uno.Foundation.WebAssemblyRuntime.InvokeJS("(()=>{const e="+json+";e.sequence=(window.chartSceneInput?.sequence||0)+1;window.chartSceneInput=e;const q=window.chartSceneInputEvents ||= [];q.push(e);if(q.length>64)q.shift();return '';})()");
     }

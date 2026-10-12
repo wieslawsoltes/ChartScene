@@ -16,6 +16,10 @@ public static partial class AdditionalTests
         NavigatorReentrancyTests.Register(suite);
         LegendTests.Register(suite);
         LegendRefreshTests.Register(suite);
+        ConditionalDataEditTests.Register(suite);
+        DataPointEditTests.Register(suite);
+        DataPointEditBoundaryTests.Register(suite);
+        EditingCursorTests.Register(suite);
         GridPerformanceTests.Register(suite);
         DataIntegrityTests.Register(suite);
         HitTestIntegrityTests.Register(suite);
