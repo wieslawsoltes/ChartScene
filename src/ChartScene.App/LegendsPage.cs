@@ -31,7 +31,7 @@ public sealed class LegendsPage : Page
     private ChartModel? _model, _previous;
     private RenderableSeries? _optional;
     private int _placement, _generation, _appends, _oldEdits;
-    private bool _light, _style, _customRow, _customMarker;
+    private bool _light, _style, _customRow, _customMarker, _textStyle;
     private long _actions;
     private string _lastAction = "";
     private readonly ChartTheme _dark = ChartTheme.Dark with { Background = new(21,26,38), PlotBackground = new(25,42,65), Border = new(49,59,77) };
@@ -70,6 +70,8 @@ public sealed class LegendsPage : Page
         Command("rowTemplate", "Row template", ChartGlyph.Source, () => { _customRow = !_customRow; _legend.ItemTemplate = _customRow ? (DataTemplate)_templates["LegendRow"] : null; });
         Command("markerTemplate", "Marker template", ChartGlyph.Columns, () => { _customMarker = !_customMarker; _legend.MarkerTemplate = _customMarker ? (DataTemplate)_templates["LegendMarker"] : null; });
         Command("theme", "Light / dark", ChartGlyph.Settings, () => { _light = !_light; ApplyTheme(); });
+        Command("text", "Legend typography", ChartGlyph.Annotate, ToggleTextStyle);
+        Command("many", "4 / 256 channels", ChartGlyph.Columns, () => LoadModel(_model?.RenderableSeries.Count > 4 ? 4 : 256));
         var scroll = new ScrollViewer { Content = tools, HorizontalScrollMode = ScrollMode.Enabled, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollMode = ScrollMode.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
         Grid.SetRow(scroll, 1); _root.Children.Add(scroll); Register("toolbar", scroll);
         for (int i = 0; i < 3; i++)
@@ -105,20 +107,25 @@ public sealed class LegendsPage : Page
         Grid.SetRow(_legendHost, _placement == 1 ? 2 : _placement == 3 ? 0 : 1);
         Grid.SetColumn(_legendHost, _placement == 0 ? 2 : _placement == 2 ? 0 : 1);
     }
-    private void LoadModel()
+    private void LoadModel() => LoadModel(4);
+    private void LoadModel(int seriesCount)
     {
         _generation++; _style = false;
         var model = new ChartModel { Title = "Interactive chart legend", Subtitle = "The same series models drive the plot, legend and visibility history", ShowLegend = false, Theme = _light ? ChartTheme.Light : _dark };
         string[] ids = ["sine", "cosine", "area", "scatter"];
         string[] names = ["Sine wave", "Cosine wave", "Envelope", "Samples"];
         SeriesKind[] kinds = [SeriesKind.Line, SeriesKind.Line, SeriesKind.Mountain, SeriesKind.Scatter];
-        for (int j = 0; j < ids.Length; j++)
+        for (int j = 0; j < seriesCount; j++)
         {
-            var data = new XyDataSeries(); int count = j == 3 ? 65 : 513;
+            var data = new XyDataSeries(); int count = j >= 4 ? 2 : j == 3 ? 65 : 513;
             double[] x = new double[count], y = new double[count];
             for (int i = 0; i < count; i++) { x[i] = 10.0 * i / (count - 1); y[i] = Signal(x[i], j); }
             data.AppendRange(x, y);
-            model.RenderableSeries.Add(new(kinds[j]) { Id = ids[j], SeriesName = names[j], DataSeries = data, Stroke = model.Theme.Palette[j], Fill = model.Theme.Palette[j].WithAlpha(65), PointMarker = j == 1 ? PointMarker.Diamond : PointMarker.None, MarkerSize = 5, IsSelected = j == 2 });
+            var color = model.Theme.Palette[j % model.Theme.Palette.Count];
+            model.RenderableSeries.Add(new(j < 4 ? kinds[j] : SeriesKind.Line) {
+                Id = j < 4 ? ids[j] : "channel-" + j, SeriesName = j < 4 ? names[j] : $"Channel {j + 1:000}",
+                DataSeries = data, Stroke = color, Fill = color.WithAlpha(65),
+                PointMarker = j == 1 ? PointMarker.Diamond : PointMarker.None, MarkerSize = 5, IsSelected = j == 2 });
         }
         model.XAxis.VisibleRange = new(0, 10); model.YAxis.VisibleRange = new(-2, 2);
         model.XAxis.AutoRange = model.YAxis.AutoRange = AutoRange.Never;
@@ -135,6 +142,15 @@ public sealed class LegendsPage : Page
             series.SeriesName = _style ? "Sine wave / updated" : "Sine wave";
             series.Stroke = _model.Theme.Palette[_style ? 4 : 0]; series.PointMarker = _style ? PointMarker.Square : PointMarker.None;
         }
+    }
+    private void ToggleTextStyle()
+    {
+        _textStyle = !_textStyle;
+        _legend.FontSize = _textStyle ? 18 : 12;
+        _legend.FontWeight = _textStyle ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal;
+        _legend.FontStyle = _textStyle ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal;
+        if (_textStyle) _legend.Foreground = Brush(new(240, 155, 75));
+        else _legend.ClearValue(Control.ForegroundProperty);
     }
     private void ToggleOptional()
     {
@@ -166,6 +182,8 @@ public sealed class LegendsPage : Page
         _buttons["checks"].IsActive = _legend.ShowVisibilityCheckboxes; _buttons["markers"].IsActive = _legend.ShowSeriesMarkers;
         _buttons["rowTemplate"].IsActive = _customRow; _buttons["markerTemplate"].IsActive = _customMarker;
         _buttons["old"].IsEnabled = _previous is not null;
+        _buttons["text"].IsActive = _textStyle;
+        _buttons["many"].IsActive = _model?.RenderableSeries.Count > 4;
         if (_model is null) return;
         _buttons["undo"].IsEnabled = _chart.Controller.History.CanUndo; _buttons["redo"].IsEnabled = _chart.Controller.History.CanRedo;
         _buttons["exclude"].IsActive = !Find("cosine").IncludeInLegend; _buttons["select"].IsActive = Find("cosine").IsSelected;
@@ -185,6 +203,16 @@ public sealed class LegendsPage : Page
             if (Checkbox(VisualTreeHelper.GetChild(element, i)) is { } child) return child;
         return null;
     }
+    private LegendTypographySnapshot? Typography()
+    {
+        var row = _legend.Entries.FirstOrDefault();
+        if (row is null || _legend.ContainerFromEntry(row) is not Panel panel) return null;
+        var text = panel.Children.OfType<TextBlock>().FirstOrDefault();
+        if (text is null) return null;
+        var color = (text.Foreground as SolidColorBrush)?.Color;
+        return new(text.FontSize, text.FontStyle.ToString(), text.FontWeight.Weight,
+            color is { } c ? $"#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}" : null);
+    }
     private void Publish()
     {
         if (!IsLoaded || _model is null) return;
@@ -194,6 +222,7 @@ public sealed class LegendsPage : Page
             _chart.LastError, _generation, _appends, _oldEdits, Placements[_placement], _legend.SourceMode.ToString(), _model.Theme.Name,
             _legend.ShowVisibilityCheckboxes, _legend.ShowSeriesMarkers, _customRow, _customMarker, _legend.RowCreationCount, _legend.EntryCreationCount, _legend.MembershipPassCount,
             _chart.Controller.History.CanUndo, _chart.Controller.History.CanRedo, _chart.FrameCount, _actions, _lastAction, _legend.RetainedRowCount,
+            _legend.RowSynchronizationCount, _legend.MarkerInvalidationCount, Typography(),
             _legend.Entries.Select(e => new LegendEntrySnapshot(e.Identity, e.Series.Id, e.SeriesName, e.IsVisible, Bounds(_legend.ContainerFromEntry(e)), Bounds(Checkbox(_legend.ContainerFromEntry(e))))).ToArray(),
             _model.RenderableSeries.Select(s => new LegendSeriesSnapshot(s.Id, s.SeriesName, s.IsVisible, s.IncludeInLegend, s.IsSelected, s.DataSeries?.Count ?? 0)).ToArray(),
             _controls.ToDictionary(p => p.Key, p => Bounds(p.Value)));
@@ -205,6 +234,8 @@ public sealed record LegendEntrySnapshot(long identity, string id, string name, 
 public sealed record LegendSeriesSnapshot(string id, string name, bool visible, bool included, bool selected, int points);
 public sealed record LegendsSnapshot(bool ready, string? error, int generation, int appends, int oldEdits, string placement, string filter, string theme,
     bool checkboxes, bool markers, bool rowTemplate, bool markerTemplate, long rowsCreated, long entriesCreated, long membershipPasses, bool canUndo, bool canRedo, long frames, long actions, string lastAction, int retainedRows,
+    long rowSynchronizations, long markerInvalidations, LegendTypographySnapshot? typography,
     LegendEntrySnapshot[] entries, LegendSeriesSnapshot[] series, Dictionary<string, ControlBounds?> controls);
+public sealed record LegendTypographySnapshot(double fontSize, string fontStyle, int fontWeight, string? foreground);
 [JsonSerializable(typeof(LegendsSnapshot))]
 public partial class LegendsJsonContext : JsonSerializerContext;
