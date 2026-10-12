@@ -18,7 +18,7 @@ public enum DataPointEditOutcome { None, Started, Preview, Committed, Cancelled,
 /// A single successful gesture records one guarded history entry. Continuous auto-ranging
 /// of the value axis must be disabled before editing, so pointer motion has a stable scale.
 /// </summary>
-public sealed class DataPointEditModifier : ChartModifier
+public sealed class DataPointEditModifier : ChartModifier, IChartCursorOwner
 {
     private sealed class Epoch(long revision) { public long Revision = revision; public bool Valid = true; }
     private sealed class Session(ChartController owner, RenderableSeries series, DataSeries data, Epoch epoch,
@@ -45,6 +45,7 @@ public sealed class DataPointEditModifier : ChartModifier
         set { if (!double.IsFinite(value) || value < 0) throw new ArgumentOutOfRangeException(nameof(value)); _hitRadius = value; }
     }
     public bool IsEditing => _session is not null;
+    public bool OwnsCursor => IsEditing;
     public RenderableSeries? ActiveSeries => _session?.Series;
     public int ActiveIndex => _session?.Index ?? -1;
     public double? ActiveValue => _session?.Current;
@@ -98,7 +99,9 @@ public sealed class DataPointEditModifier : ChartModifier
             _session = session; _generation++;
             Watch(session, true); Overlay(session); Report(DataPointEditOutcome.Started);
             // A subscriber may cancel or replace the chart synchronously.
-            return ReferenceEquals(_session, session) ? ModifierResult.Capture : ModifierResult.Handled;
+            if (!ReferenceEquals(_session, session)) return ModifierResult.Handled;
+            if (!Valid(session)) { Abandon(session); return ModifierResult.Handled; }
+            return ModifierResult.Capture;
         }
         Report(DataPointEditOutcome.Unsupported); return ModifierResult.Handled;
     }

@@ -19,6 +19,7 @@ public static partial class AdditionalTests
         ConditionalDataEditTests.Register(suite);
         DataPointEditTests.Register(suite);
         DataPointEditBoundaryTests.Register(suite);
+        EditingCursorTests.Register(suite);
         GridPerformanceTests.Register(suite);
         DataIntegrityTests.Register(suite);
         HitTestIntegrityTests.Register(suite);
