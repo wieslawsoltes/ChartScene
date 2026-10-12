@@ -56,13 +56,15 @@ public sealed partial class LinkedChartsPage
         }
         var state=new AlignmentSnapshot(_alignPlots.IsChecked==true,_wideLabels.IsChecked==true,_extraAxis,_lower.Visibility==Visibility.Visible,_reserved,
             stats.Members,stats.AggregatePasses,stats.Notifications,_upper.SceneCacheStatistics.SceneBuilds,_lower.SceneCacheStatistics.SceneBuilds,
-            Natural(_upper),Natural(_lower));
+            Natural(_upper),Natural(_lower),_upper.Model.Theme.Name,_lower.Model.Theme.Name,
+            _controls.TryGetValue("theme",out var command)&&command is ChartToolButton { IsActive:true });
         Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.chartSceneAlignment="+JsonSerializer.Serialize(state,AlignmentJsonContext.Default.AlignmentSnapshot));
 #endif
     }
 }
 public sealed record MarginObservation(double left,double top,double right,double bottom);
 public sealed record AlignmentSnapshot(bool enabled,bool wideLabels,bool rightAxis,bool lowerVisible,bool reserved,int members,long passes,long notifications,
-    long upperSceneBuilds,long lowerSceneBuilds,MarginObservation upperNatural,MarginObservation lowerNatural);
+    long upperSceneBuilds,long lowerSceneBuilds,MarginObservation upperNatural,MarginObservation lowerNatural,
+    string upperTheme,string lowerTheme,bool themeCommandActive);
 [JsonSerializable(typeof(AlignmentSnapshot))]
 public partial class AlignmentJsonContext:JsonSerializerContext;

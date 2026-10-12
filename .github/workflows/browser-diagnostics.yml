@@ -1,25 +1,21 @@
 name: Inspect browser diagnostics
 on:
-  pull_request:
-    paths: [.github/workflows/browser-diagnostics.yml]
   workflow_dispatch:
     inputs:
       run_id:
         description: Application run whose preserved diagnostics should be inspected
         required: true
-        default: '38223543454'
 permissions:
   contents: read
   actions: read
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: application-validation
-          run-id: ${{ inputs.run_id || '38223543454' }}
+          run-id: ${{ inputs.run_id }}
           github-token: ${{ github.token }}
           path: diagnostics
       - name: Summarize preserved browser failures
@@ -27,30 +23,20 @@ jobs:
         run: |
           from pathlib import Path
           import json
-          root = Path('diagnostics')
-          for name in ('validated-commit.txt', 'summary.json'):
-              path = root / name
-              if path.is_file(): print('IDENTITY', name, path.read_text()[:10000], flush=True)
-          directories = sorted(root.glob('browser-tests*'))
-          if not directories: raise SystemExit('No browser diagnostics were preserved')
+          directories = sorted(Path('diagnostics').glob('browser-tests*'))
+          if not directories:
+              raise SystemExit('No browser diagnostics were preserved')
           for directory in directories:
               path = directory / 'results.json'
-              if not path.is_file(): continue
-              value = json.loads(path.read_text())
-              print('SUMMARY', directory.name, value.get('total'), 'tests;', value.get('failed'), 'failed', flush=True)
-              failed = [test for test in value.get('tests', []) if not test.get('passed')]
-              for test in failed:
-                  print('FAILED', json.dumps(test)[:6000], flush=True)
-              if not failed: continue
-              for name in ('failure-state.json', 'final-state.json', 'managed-input.json'):
-                  path = directory / name
-                  if path.is_file():
-                      state = json.loads(path.read_text())
-                      if isinstance(state, list): state = state[-12:]
-                      print('STATE', directory.name, name, json.dumps(state)[:18000], flush=True)
+              if path.is_file():
+                  value = json.loads(path.read_text())
+                  print('SUMMARY', directory.name, value.get('total'), 'tests;', value.get('failed'), 'failed', flush=True)
+                  for test in value.get('tests', []):
+                      if not test.get('passed'):
+                          print('FAILED', test.get('name'), str(test.get('error'))[:3000], flush=True)
               path = directory / 'console.json'
               if path.is_file():
                   for entry in json.loads(path.read_text())[-100:]:
                       text = str(entry.get('text', ''))
-                      if entry.get('type') == 'pageerror' or any(term in text.lower() for term in ['exception', 'failed', 'error:']):
-                          print('CONSOLE', directory.name, text[:1600], flush=True)
+                      if any(term in text.lower() for term in ['exception', 'failed', 'framebuffer', 'chartscene_gl', 'error:']):
+                          print('CONSOLE', directory.name, text[:3000], flush=True)
