@@ -135,6 +135,39 @@ public class DataSeries : IDataSeries
         }
         Notify(notify);
     }
+    /// <summary>
+    /// Compare/exchange one value under the same lock as append, FIFO eviction and replacement.
+    /// A stale revision or bitwise value mismatch returns false without touching data. Current
+    /// invalid indices, values, row invariants or X ordering are diagnosed before mutation.
+    /// A bit-identical replacement succeeds without invalidating snapshots or notifying.
+    /// appliedRevision is the revision at the write, not a later reentrant subscriber revision.
+    /// Work is proportional to channel count, not sample count; at most 64 channels use stack storage.
+    /// </summary>
+    public bool TryUpdateChannelValue(int index, int channel, double expectedValue, double value,
+        long expectedRevision, out long appliedRevision)
+    {
+        if ((uint)channel >= (uint)ChannelCount) throw new ArgumentOutOfRangeException(nameof(channel));
+        bool notify;
+        lock (_gate)
+        {
+            appliedRevision = _revision;
+            if (_revision != expectedRevision) return false;
+            CheckIndex(index);
+            double before = Read(channel, index);
+            if (BitConverter.DoubleToInt64Bits(before) != BitConverter.DoubleToInt64Bits(expectedValue)) return false;
+            if (BitConverter.DoubleToInt64Bits(before) == BitConverter.DoubleToInt64Bits(value)) return true;
+            Span<double> row = ChannelCount <= 64 ? stackalloc double[ChannelCount] : new double[ChannelCount];
+            for (int c = 0; c < ChannelCount; c++) row[c] = Read(c, index);
+            row[channel] = value; ValidatePoint(row);
+            if (channel == 0) ValidateReplacementOrder(index, value, value, 1);
+            int removed = channel == 0 ? CountEdges(index, index + 1) : 0;
+            _columns[channel][Physical(index)] = value;
+            if (channel == 0) _inversions += CountEdges(index, index + 1) - removed;
+            notify = Changed(); appliedRevision = _revision;
+        }
+        Notify(notify);
+        return true;
+    }
     /// <summary>Atomically replaces an existing interval, without inserting or changing its length.</summary>
     public void UpdateRange(int index, params double[][] columns)
     {
