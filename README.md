@@ -14,7 +14,7 @@ ChartScene targets publicly documented SciChart WPF behavior, but **is not a dro
 | `ChartScene.Charting` | Axes, series, themes, annotations, coordinate systems and stacking |
 | `ChartScene.Rendering` | Drawing contracts, layout, 2D geometry and diagnostics |
 | `ChartScene.Rendering.Skia` | Cached Skia rendering, shaped text and CPU offscreen PNG export |
-| `ChartScene.Interaction` | Hit testing, modifiers, undo/redo, linked ranges and linked cursors |
+| `ChartScene.Interaction` | Hit testing, modifiers, guarded point editing, undo/redo, linked ranges and linked cursors |
 | `ChartScene.ThreeD` | 3D data/models, cameras, normalization, mesh generation and spatial picking |
 | `ChartScene.Rendering.OpenGL` | OpenGL 3.3 / GLES 3 renderer with persistent geometry buffers |
 | `ChartScene.Controls` | Reusable Uno 2D/3D surfaces, legends, overview/scrollbars and synchronization adapter |
@@ -97,6 +97,30 @@ var legend = new HeatmapColorLegend { Series = heatmapSeries };
 // Set heatmapSeries.ColorMapRange for fixed color limits, or null for data-derived limits.
 ```
 
+## Edit original data points
+
+The **Edit data** gallery (`?view=editing`) uses the reusable chart surface, point editor and native series legend. It includes a compact vector toolbar, live point inspector, explicit Edit/Pan mode, shape selection, logarithmic/rotated/flipped axes and shared undo/redo. At narrower widths the inspector collapses to leave more space for the chart. Light and dark styles apply to the tools, inspector and plot.
+
+```csharp
+using ChartScene.Interaction;
+
+model.ZoomExtents();
+model.YAxis.AutoRange = AutoRange.Never; // keep the value scale stable while dragging
+model.RenderableSeries[0].PointMarker = PointMarker.Ellipse;
+var editor = new DataPointEditModifier { IsEnabled = true, HitRadius = 14 };
+surface.Controller.Modifiers.Insert(0, editor);
+```
+
+Drag an original source endpoint to change its Y value. X and other points stay unchanged; one gesture creates one history entry. Escape rolls back a valid preview. External source changes supersede stale edits and guarded history commands instead of being overwritten. `DataSeries.TryUpdateChannelValue` exposes the atomic revision-and-value checked mutation independently of Uno.
+
+Supported editable kinds are Cartesian two-channel line, digital line, spline, mountain, spline mountain, scatter, column, bar and impulse. Editing is disabled by default and does not silently change auto-ranging policies. X-coordinate, financial/multi-channel, stacked and non-Cartesian editing remain outside this implementation. See [editing contracts, conflict semantics and validation](docs/reviews/data-point-editing.md).
+
+## Interactive series legends
+
+`ChartLegend` binds to a `ParentSurface` or an independent `Model` and `History`. Native checkboxes share visibility undo/redo, and vector swatches represent supported series kinds. The **Legends** gallery (`?view=legends`) demonstrates five placements, filtering, compiled XAML row/marker templates, typography, theme changes and 4/256-series models. Surviving row identities are retained; the native tree updates after each settled membership change rather than after every intermediate insertion.
+
+Legends are not virtualized, and custom row templates own their command policy. See [interactive legend contracts](docs/reviews/interactive-legends.md) and [typography and performance](docs/reviews/legend-typography-performance.md).
+
 ## Performance contracts
 
 The resampler uses weakly cached per-snapshot extrema pyramids, then caches unchanged viewport indices privately in each renderer. Duplicate X values, earliest tied extrema, endpoints and every NaN break retain their source indices. Logarithmic axes use logarithmic screen buckets. Non-uniform heatmaps visit only visible cells; contour geometry is cached separately from palette and viewport changes.
@@ -127,13 +151,13 @@ python3 tools/stage-site.py
 python3 -m http.server 8765 --directory artifacts/site
 ```
 
-Open the served root for 2D, `?view=3d` for 3D, `?view=linked` for linked charts, `?view=colors` for color legends, `?view=overview` for overview navigation, or `?view=stacks` for stacked data. Use HTTP/HTTPS rather than `file://`.
+Open the served root for 2D, `?view=3d` for 3D, `?view=linked` for linked charts, `?view=colors` for color legends, `?view=overview` for overview navigation, `?view=stacks` for stacked data, `?view=legends` for series legends, or `?view=editing` for point editing. Use HTTP/HTTPS rather than `file://`.
 
 The gallery includes example search, 29 2D series kinds, multiple numeric/log/date axes, annotations, selection, navigation history, a million-sample example, real-time FIFO streaming, themes and actual PNG/CSV downloads. The 3D gallery includes camera orbit/pan/zoom, projections, surface/grid modes, legends, picking and selection.
 
 ## Validation and deployment
 
-[Application CI](.github/workflows/application.yml) builds both Uno targets, serves the exact publish output at `/ChartScene/`, tests all six galleries through real browser input, packages all 12 libraries and compiles isolated package-only consumers. A native EGL job renders every 3D fixture through both desktop GL and GLES.
+[Application CI](.github/workflows/application.yml) builds both Uno targets, serves the exact publish output at `/ChartScene/`, tests all eight galleries through real browser input, packages all 12 libraries and compiles isolated package-only consumers. A native EGL job renders every 3D fixture through both desktop GL and GLES.
 
 Pages deployment is gated on successful application and GPU jobs on `main`. Artifact existence or a successful publish alone is not deployment or runtime validation. `build-info.json` identifies the staged source commit. See [validation evidence and limits](docs/validation.md) and [remaining compatibility scope](docs/parity-status.md).
 

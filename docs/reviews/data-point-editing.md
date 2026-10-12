@@ -107,5 +107,43 @@ F6 conflict handling, shape switching, coordinate modes, responsive layout,
 themes and unload/reload. The no-input startup suite includes the new module.
 Both existing Uno targets, all previous browser suites, native GL/GLES fixtures,
 12 packages and isolated package-only consumers remain required before merge.
-No new local test run is claimed: the execution environment was unavailable in
-this continuation, so validation runs through GitHub Actions on published commits.
+The recovered source was independently tree-verified, and the full core suite ran
+locally after execution became available again. New cursor/cancellation tests
+first reproduced five failures against the previous source, then passed with the
+fixes. Local browser navigation is administratively blocked; browser validation
+therefore uses the exact published application in GitHub Actions, not a claimed
+local browser pass.
+
+
+## Captured cursor ownership and start callbacks
+
+`IChartCursorOwner` lets an active captured modifier supply its own cursor and hit
+list. The point editor uses this to keep the overlay anchored to the source point,
+including perpendicular motion and unrelated pointer events. Ordinary uncaptured
+rollover and captured pan are unchanged. Before the fix, 100 captured moves on a
+million-point source caused 100 redundant rollover snapshot reads; the new fixture
+requires zero. It does not include frame rendering, user subscribers or snapshots
+needed by those consumers. Evidence is `artifacts/performance/editing-dispatch.json`.
+
+The controller also checks whether cancellation occurred while a modifier was
+publishing its start notification. It releases not-yet-captured modifier state
+instead of acquiring capture after a subscriber called Cancel or Dispose. The
+editor separately rechecks source validity after start callbacks. Tests cover
+cancellation, disposal and an external source edit during that notification.
+
+## Browser input oracle
+
+The initial editing browser assertions assumed that requested fractional pointer
+coordinates were delivered without conversion. The preserved run
+`38281176156` passed all 30 cold-start cases, but its first drag produced
+`70.00000084419303` rather than the requested `70`, outside the original `1e-7`
+assertion. The source point had been edited and committed; startup was not the
+failure. Subsequent interrupted cases inherited that unfinished test state.
+
+The revised tests retain the same numeric tolerance and derive expected Y from
+acknowledged managed Down/Move coordinates and an independent axis formula,
+including the original grab offset, orientation, flip and logarithmic scale.
+They preserve those inputs and comparisons in `point-input-oracles.json`.
+Undo/redo must restore the actual committed value and original bits, not an
+idealized requested coordinate. No application state is written by these tests,
+and all previous suites and deployment gates remain required.

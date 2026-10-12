@@ -15,7 +15,7 @@ parser.add_argument('--url', default='http://127.0.0.1:8765/ChartScene/')
 parser.add_argument('--output', default='artifacts/browser-tests-editing')
 args = parser.parse_args()
 out = Path(args.output); out.mkdir(parents=True, exist_ok=True)
-results, logs = [], []
+results, logs, gestures = [], [], []
 with sync_playwright() as p:
     browser = p.chromium.launch(args=['--enable-webgl','--ignore-gpu-blocklist','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
     page = browser.new_page(viewport={'width':1440,'height':1000})
@@ -25,7 +25,7 @@ with sync_playwright() as p:
     inputs = UnoInput(page, out)
     def state(): return page.evaluate('window.chartSceneEditing || {}')
     def ready():
-        page.wait_for_function("()=>{const s=window.chartSceneEditing;if(s?.error)throw new Error(s.error);return s?.ready&&!document.querySelector('#loading.uno-persistent-loader')}",timeout=120_000)
+        page.wait_for_function("()=>{const fatal=window.chartScene?.fatalError;if(fatal)throw new Error(fatal);const s=window.chartSceneEditing;if(s?.error)throw new Error(s.error);return s?.ready&&!document.querySelector('#loading.uno-persistent-loader')}",timeout=120_000)
     def command(name):
         before = state()['actions']
         inputs.click('editing-'+name, state()['controls'][name], resolve=lambda: state()['controls'].get(name))
@@ -39,21 +39,42 @@ with sync_playwright() as p:
         if s['valueVertical'] != s['flipped']: fraction=1-fraction
         if s['valueVertical']: return point['screenX'], plot['y']+fraction*plot['height']
         return plot['x']+fraction*plot['width'], point['screenY']
+    def sequence(): return page.evaluate('window.chartSceneInput?.sequence||0')
+    def event(kind, after, x, y):
+        page.wait_for_function('p=>(window.chartSceneInputEvents||[]).some(e=>e.sequence>p.after&&e.target==="editing-chart"&&e.kind===p.kind&&Math.abs(e.x-p.x)<1&&Math.abs(e.y-p.y)<1)',arg={'after':after,'kind':kind,'x':x,'y':y})
+        return page.evaluate('p=>(window.chartSceneInputEvents||[]).filter(e=>e.sequence>p.after&&e.target==="editing-chart"&&e.kind===p.kind).at(-1)',{'after':after,'kind':kind})
     def begin():
-        ready(); point=state()['points'][8]
+        ready();before=state();point=before['points'][8]
         page.mouse.move(point['screenX'],point['screenY'])
-        page.wait_for_function('p=>(window.chartSceneInputEvents||[]).some(e=>e.target==="editing-chart"&&e.kind==="move"&&Math.abs(e.x-p.x)<1&&Math.abs(e.y-p.y)<1)',arg={'x':point['screenX'],'y':point['screenY']})
-        page.mouse.down()
+        # A repeated coordinate need not generate a move; Down must nevertheless
+        # be acknowledged by managed input and capture the original source point.
+        after=sequence();page.mouse.down();down=event('down',after,point['screenX'],point['screenY'])
         page.wait_for_function('window.chartSceneEditing.editing===true')
+        return {'before':before,'down':down}
+    def preview(gesture, y):
+        s=gesture['before'];target=screen_for_y(s,y);after=sequence()
+        page.mouse.move(*target,steps=7);move=event('move',after,*target)
+        # Independent axis oracle based on delivered coordinates, not requested
+        # fractional automation coordinates (which Uno may store as float values).
+        point=s['points'][8];plot=s['plot'];vertical=s['valueVertical'];key='y' if vertical else 'x'
+        projected=point['screenY' if vertical else 'screenX']+move[key]-gesture['down'][key]
+        fraction=max(0,min(1,(projected-plot[key])/plot['height' if vertical else 'width']))
+        if vertical != s['flipped']:fraction=1-fraction
+        expected=10**(fraction*2) if s['logarithmic'] else fraction*100
+        wait_value(expected)
+        gestures.append({'kind':s['kind'],'logarithmic':s['logarithmic'],'rotated':s['rotated'],'flipped':s['flipped'],
+            'requestedValue':y,'down':gesture['down'],'move':move,'expectedValue':expected,'actualValue':state()['points'][8]['y']})
+        (out/'point-input-oracles.json').write_text(json.dumps(gestures,indent=2))
+        return expected
     def drag(y):
-        before=state(); target=screen_for_y(before,y); begin()
-        try:
-            page.mouse.move(*target,steps=7); wait_value(y)
+        gesture=begin();before=gesture['before']
+        try: actual=preview(gesture,y)
         finally: page.mouse.up()
         page.wait_for_function('window.chartSceneEditing.editing===false');ready()
         assert state()['commits']==before['commits']+1
         assert [q['x'] for q in state()['points']]==[q['x'] for q in before['points']]
         assert all(abs(q['y']-before['points'][i]['y'])<1e-12 for i,q in enumerate(state()['points']) if i!=8)
+        wait_value(actual);return actual
     def pixels(name):
         ready(); page.screenshot(path=str(out/(name+'.png')));b=state()['plot']
         with Image.open(out/(name+'.png')) as im:
@@ -78,13 +99,18 @@ with sync_playwright() as p:
         test('native point editing startup',ready)
         test('editing plot contains visible source geometry',lambda:pixels('editing-dark'))
         def basic():
-            command('reset');drag(70);command('undo');wait_value(50);command('redo');wait_value(70)
+            command('reset');value=drag(70);command('undo');wait_value(50);command('redo');wait_value(value)
             pixels('editing-dragged')
         test('original source drag preserves X and supports shared undo redo',basic)
+        def reset():
+            command('reset');drag(60);generation=state()['generation'];command('reset');wait_value(50)
+            assert state()['generation']==generation+1 and not state()['canUndo'] and not state()['canRedo']
+            assert len(state()['points'])==17
+        test('source replacement resets the active controller history',reset)
         def cancel():
-            command('reset');before=state();target=screen_for_y(before,65);begin()
+            command('reset');gesture=begin();before=gesture['before']
             try:
-                page.mouse.move(*target,steps=4);wait_value(65);page.keyboard.press('Escape');wait_value(50)
+                preview(gesture,65);page.keyboard.press('Escape');wait_value(50)
             finally: page.mouse.up()
             assert not state()['editing'] and not state()['canUndo'] and state()['commits']==before['commits']
         test('Escape rolls back the live preview without history',cancel)
@@ -94,9 +120,9 @@ with sync_playwright() as p:
             assert state()['dataRevision']==before['dataRevision'] and not state()['canUndo']
         test('stationary marker clicks preserve exact data revision',stationary)
         def history():
-            command('reset');drag(60);drag(70)
-            command('undo');wait_value(60);command('undo');wait_value(50)
-            command('redo');wait_value(60);command('redo');wait_value(70)
+            command('reset');first=drag(60);second=drag(70)
+            command('undo');wait_value(first);command('undo');wait_value(50)
+            command('redo');wait_value(first);command('redo');wait_value(second)
         test('separate gestures remain undoable in the correct order',history)
         def transforms():
             command('reset');command('log');drag(65);command('undo');wait_value(50)
@@ -105,9 +131,9 @@ with sync_playwright() as p:
             command('flip');command('rotate');command('log')
         test('logarithmic rotated and flipped axes edit the correct value coordinate',transforms)
         def conflict():
-            command('reset');before=state();target=screen_for_y(before,65);begin()
+            command('reset');gesture=begin();before=gesture['before']
             try:
-                page.mouse.move(*target,steps=4);wait_value(65)
+                preview(gesture,65)
                 page.keyboard.press('F6');wait_value(82)
             finally: page.mouse.up()
             page.wait_for_function('window.chartSceneEditing.editing===false');ready()
@@ -148,19 +174,19 @@ with sync_playwright() as p:
             page.set_viewport_size({'width':1440,'height':1000});page.wait_for_function('window.chartSceneEditing.controls.inspector!==null');ready()
         test('compact editing keeps the chart and commands reachable',compact)
         def reattach():
-            drag(70);before=state()
+            value=drag(70);before=state()
             for name in ['linked','editing']:
                 key='gallery-'+name;resolve=lambda key=key:page.evaluate('k=>window.chartSceneGallery.controls[k]',key)
                 inputs.click(key,resolve(),resolve=resolve)
                 page.wait_for_function('v=>window.chartSceneGallery.view===v',arg=name)
-            ready();wait_value(70);assert state()['generation']==before['generation']
+            ready();wait_value(value);assert state()['generation']==before['generation']
             command('undo');wait_value(50)
         test('editing view unload and reload retains data and undo history',reattach)
         def idle():
             before=state()['frames'];page.wait_for_timeout(1200)
             assert state()['frames']-before<=3,(before,state()['frames'])
         test('idle point inspector does not force continuous chart redraw',idle)
-        def clean():assert not [e for e in logs if e['type']=='pageerror'],logs
+        def clean():assert not [e for e in logs if e['type']=='pageerror' or 'FRAMEWORK_FATAL' in e['text']],logs
         test('editing gallery has no unhandled browser errors',clean)
         (out/'final-state.json').write_text(json.dumps(state(),indent=2))
     finally:
