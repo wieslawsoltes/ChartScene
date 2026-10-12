@@ -6,8 +6,31 @@ namespace ChartScene.Charting;
 public enum AnnotationKind { Line,HorizontalLine,VerticalLine,Box,Text,Arrow,Polyline,Polygon,AxisMarker,FibonacciRetracement }
 public enum CoordinateMode { Data,Relative,Pixel }
 public enum AnnotationLayer { BelowSeries,AboveSeries }
+public enum HorizontalAnchorPoint { Left,Center,Right }
+public enum VerticalAnchorPoint { Top,Center,Bottom,Baseline }
+public enum AnnotationTextAlignment { Left,Center,Right }
 public class ChartAnnotation:ObservableObject
 {
+    private HorizontalAnchorPoint _horizontalAnchor;
+    private VerticalAnchorPoint _verticalAnchor=VerticalAnchorPoint.Baseline;
+    private AnnotationTextAlignment _textAlignment;
+    private string _fontFamily="Arial";
+    private bool _fontBold;
+    private double _rotationAngle,_textPadding,_borderThickness,_lineSpacing=1;
+    private ColorRgba? _background,_borderColor;
+    public HorizontalAnchorPoint HorizontalAnchorPoint { get=>_horizontalAnchor; set { CheckEnum(value); Set(ref _horizontalAnchor,value); } }
+    /// <summary>Base annotations retain legacy baseline placement. TextAnnotation defaults to Top.</summary>
+    public VerticalAnchorPoint VerticalAnchorPoint { get=>_verticalAnchor; set { CheckEnum(value); Set(ref _verticalAnchor,value); } }
+    public AnnotationTextAlignment TextAlignment { get=>_textAlignment; set { CheckEnum(value); Set(ref _textAlignment,value); } }
+    public string FontFamily { get=>_fontFamily; set { if(string.IsNullOrWhiteSpace(value)) throw new ArgumentException("A font family is required.",nameof(value)); Set(ref _fontFamily,value); } }
+    public bool FontBold { get=>_fontBold; set=>Set(ref _fontBold,value); }
+    /// <summary>Clockwise screen rotation around the X1/Y1 anchor, in degrees.</summary>
+    public double RotationAngle { get=>_rotationAngle; set { Finite(value); Set(ref _rotationAngle,value%360); } }
+    public double TextPadding { get=>_textPadding; set { Finite(value); if(value<0) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _textPadding,value); } }
+    public double LineSpacing { get=>_lineSpacing; set { Finite(value); if(value<1) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _lineSpacing,value); } }
+    public ColorRgba? Background { get=>_background; set=>Set(ref _background,value); }
+    public ColorRgba? BorderColor { get=>_borderColor; set=>Set(ref _borderColor,value); }
+    public double BorderThickness { get=>_borderThickness; set { Finite(value); if(value<0) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _borderThickness,value); } }
     private double _x1,_y1,_x2=1,_y2=1,_thickness=1.5,_fontSize=12;
     private string _text="",_xAxisId="X",_yAxisId="Y";
     private bool _visible=true,_editable=true,_selected,_clipToPlot=true,_showLabel=true;
@@ -58,4 +81,7 @@ public sealed class LineAnnotation():ChartAnnotation(AnnotationKind.Line);
 public sealed class HorizontalLineAnnotation():ChartAnnotation(AnnotationKind.HorizontalLine);
 public sealed class VerticalLineAnnotation():ChartAnnotation(AnnotationKind.VerticalLine);
 public sealed class BoxAnnotation():ChartAnnotation(AnnotationKind.Box);
-public sealed class TextAnnotation():ChartAnnotation(AnnotationKind.Text);
+public sealed class TextAnnotation:ChartAnnotation
+{
+    public TextAnnotation():base(AnnotationKind.Text) => VerticalAnchorPoint=VerticalAnchorPoint.Top;
+}
