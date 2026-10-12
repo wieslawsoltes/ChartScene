@@ -156,7 +156,7 @@ public sealed class ChartController:IDisposable
     public double Fraction(AxisModel axis,PointD point)
     {
         if(Frame is null) return .5;
-        var p=Frame.Layout.PlotArea;
+        var p=Frame!.Layout.PlotArea;
         double value=axis.IsVertical?(point.Y-p.Y)/p.Height:(point.X-p.X)/p.Width;
         return axis.IsVertical^axis.FlippedCoordinates?1-value:value;
     }
@@ -357,7 +357,7 @@ public sealed class AnnotationDragModifier:ChartModifier
     private sealed record State(double X1,double Y1,double X2,double Y2,PointD[] Points)
     {
         public static State Capture(ChartAnnotation a)=>new(a.X1,a.Y1,a.X2,a.Y2,a.Points.ToArray());
-        public void Restore(ChartAnnotation a) { a.X1=X1; a.Y1=Y1; a.X2=X2; a.Y2=Y2; a.Points.Clear(); foreach(var p in Points) a.Points.Add(p); }
+        public void Restore(ChartAnnotation a) { a.X1=X1; a.Y1=Y1; a.X2=X2; a.Y2=Y2; a.Points.Clear(); foreach(var point in Points) a.Points.Add(point); }
     }
     private ChartAnnotation? _annotation;
     private State? _before;
@@ -369,8 +369,12 @@ public sealed class AnnotationDragModifier:ChartModifier
         var plot=c.Frame!.Layout.PlotArea;
         if(input.Kind==ChartInputKind.Down)
         {
-            if(!plot.Contains(input.Position)) return ModifierResult.Unhandled;
-            _annotation=c.Model.Annotations.Reverse().FirstOrDefault(a=>a.IsVisible&&a.IsEditable&&AnnotationGeometry.HitDistance(c.Model,a,plot,input.Position,c.Frame)<=8);
+            bool withinPlot=plot.Contains(input.Position);
+            _annotation=c.Model.Annotations.Reverse().FirstOrDefault(a=>a.IsVisible&&a.IsEditable&&(withinPlot||a.Kind==AnnotationKind.Text)&&AnnotationGeometry.HitDistance(c.Model,a,plot,input.Position,c.Frame)<=8);
+            // Unclipped text can be painted in the surface's axis/header margins.
+            // Its measured body wins over axis navigation there, while creation and
+            // other annotation gestures remain confined to the plot.
+            if(_annotation is null&&!withinPlot)return ModifierResult.Unhandled;
             _created=false;
             if(_annotation is null&&c.Mode==ChartInteractionMode.DrawAnnotation)
             {
