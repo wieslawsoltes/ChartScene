@@ -18,7 +18,11 @@ public sealed class AxisRangeNavigator : IDisposable
         RangeNavigationPart Part, double Anchor, double Minimum, double Maximum, DoubleRange AnchorRange, AutoRange AnchorAutoRange);
     private Gesture? _gesture;
     private DoubleRange _fullRange;
-    private bool _vertical, _writing, _disposed;
+    private bool _vertical, _disposed, _disposing;
+    private long _changeVersion;
+    private string? _expectedProperty;
+    private DoubleRange _expectedRange;
+    private AutoRange _expectedAutoRange;
     private double _minimumFraction = 1e-6;
     public AxisModel Axis { get; }
     public UndoManager History { get; }
@@ -29,12 +33,12 @@ public sealed class AxisRangeNavigator : IDisposable
     public bool IsVertical
     {
         get => _vertical;
-        set { Check(); if (_vertical == value) return; Cancel(); _vertical = value; Notify(); }
+        set { Check(); if (_vertical == value) return; if (!CancelPending()) return; _vertical = value; Supersede(); Notify(); }
     }
     public DoubleRange FullRange
     {
         get => _fullRange;
-        set { Check(); Validate(value); if (_fullRange == value) return; _gesture = null; _fullRange = value; Notify(); }
+        set { Check(); Validate(value); if (_fullRange == value) return; Supersede(); _fullRange = value; Notify(); }
     }
     public double MinimumSelectionFraction
     {
@@ -42,7 +46,7 @@ public sealed class AxisRangeNavigator : IDisposable
         set
         {
             Check(); if (!double.IsFinite(value) || value <= 0 || value > 1) throw new ArgumentOutOfRangeException(nameof(value));
-            Cancel(); _minimumFraction = value; Notify();
+            if (_minimumFraction == value || !CancelPending()) return; _minimumFraction = value; Supersede(); Notify();
         }
     }
     public AxisRangeNavigator(AxisModel axis, DoubleRange fullRange, UndoManager? history = null)
@@ -109,7 +113,7 @@ public sealed class AxisRangeNavigator : IDisposable
     {
         Check(); ValidateTrack(track);
         if (!point.IsFinite || !track.Contains(point)) return false;
-        Cancel(); var layout = Layout(track); var (min, max) = Selection;
+        if (!CancelPending()) return false; var layout = Layout(track); var (min, max) = Selection;
         double coordinate = IsVertical ? point.Y : point.X;
         double da = Math.Abs(coordinate - (IsVertical ? layout.MinimumGrip.Y : layout.MinimumGrip.X));
         double db = Math.Abs(coordinate - (IsVertical ? layout.MaximumGrip.Y : layout.MaximumGrip.X));
@@ -127,7 +131,7 @@ public sealed class AxisRangeNavigator : IDisposable
             if (!ReferenceEquals(_gesture, gesture)) { Notify(); return false; }
             _gesture = gesture with { Minimum = start, Maximum = start + size, AnchorRange = Axis.VisibleRange, AnchorAutoRange = Axis.AutoRange };
         }
-        Notify(); return true;
+        Notify(); return !_disposed && _gesture is not null;
     }
     public void Move(PointD point)
     {
@@ -169,9 +173,16 @@ public sealed class AxisRangeNavigator : IDisposable
     }
     public void Cancel()
     {
-        Check(); var gesture = _gesture; _gesture = null;
-        if (gesture is not null) { Restore(gesture.Before, gesture.AutoRange); Notify(); }
+        Check(); CancelPending();
     }
+    private bool CancelPending()
+    {
+        var gesture = _gesture; Supersede();
+        long version = _changeVersion;
+        if (gesture is not null) { Restore(gesture.Before, gesture.AutoRange); Notify(); }
+        return !_disposed && version == _changeVersion;
+    }
+    private void Supersede() { _changeVersion++; _gesture = null; }
     public void Fit() => Change("Overview fit", () => Apply(0, 1));
     /// <summary>Pan by a fraction of the current selection span; positive moves toward increasing data.</summary>
     public void Pan(double amount)
@@ -207,8 +218,13 @@ public sealed class AxisRangeNavigator : IDisposable
     }
     private void Change(string description, Action operation)
     {
-        Check(); Cancel(); var before = Axis.VisibleRange; var autoRange = Axis.AutoRange;
-        operation(); Record(description, before, autoRange);
+        Check(); if (!CancelPending()) return;
+        long version = _changeVersion;
+        var before = Axis.VisibleRange; var autoRange = Axis.AutoRange;
+        operation();
+        // Callbacks can replace the range, dispose this navigator or start a newer operation.
+        // Do not claim their edits in the unfinished operation's undo command.
+        if (!_disposed && version == _changeVersion) Record(description, before, autoRange);
     }
     private void Apply(double min, double max)
     {
@@ -219,9 +235,19 @@ public sealed class AxisRangeNavigator : IDisposable
     }
     private void Restore(DoubleRange range, AutoRange autoRange)
     {
-        _writing = true;
-        try { Axis.AutoRange = autoRange; Axis.VisibleRange = range; }
-        finally { _writing = false; }
+        long version = _changeVersion;
+        try
+        {
+            // Consume exactly our own synchronous property notification, before notifying
+            // consumers. A blanket "writing" flag incorrectly masks nested external writes.
+            _expectedAutoRange = autoRange; _expectedProperty = nameof(AxisModel.AutoRange);
+            Axis.AutoRange = autoRange; _expectedProperty = null;
+            if (_disposed || version != _changeVersion || Axis.AutoRange != autoRange) return;
+            _expectedRange = range; _expectedProperty = nameof(AxisModel.VisibleRange);
+            Axis.VisibleRange = range;
+        }
+        catch { Supersede(); throw; }
+        finally { _expectedProperty = null; }
     }
     private void Record(string description, DoubleRange before, AutoRange autoRange)
     {
@@ -234,13 +260,28 @@ public sealed class AxisRangeNavigator : IDisposable
     }
     private void AxisChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (!_writing && e.PropertyName is nameof(AxisModel.VisibleRange) or nameof(AxisModel.Scale) or nameof(AxisModel.LogarithmicBase) or nameof(AxisModel.FlippedCoordinates)) _gesture = null;
+        bool own = e.PropertyName == _expectedProperty && (e.PropertyName switch
+        {
+            nameof(AxisModel.AutoRange) => Axis.AutoRange == _expectedAutoRange,
+            nameof(AxisModel.VisibleRange) => Axis.VisibleRange == _expectedRange,
+            _ => false
+        });
+        if (own) _expectedProperty = null;
+        else if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName is nameof(AxisModel.AutoRange) or
+                 nameof(AxisModel.VisibleRange) or nameof(AxisModel.Scale) or nameof(AxisModel.LogarithmicBase) or
+                 nameof(AxisModel.FlippedCoordinates)) Supersede();
         Notify();
     }
-    private void Notify() => Changed?.Invoke(this, EventArgs.Empty);
+    private void Notify() { if (!_disposed) Changed?.Invoke(this, EventArgs.Empty); }
     public void Dispose()
     {
-        if (_disposed) return;
-        Cancel(); Axis.PropertyChanged -= AxisChanged; _disposed = true;
+        if (_disposed || _disposing) return;
+        _disposing = true;
+        try { CancelPending(); }
+        finally
+        {
+            _disposed = true; Supersede(); Axis.PropertyChanged -= AxisChanged;
+            Changed = null; _disposing = false;
+        }
     }
 }

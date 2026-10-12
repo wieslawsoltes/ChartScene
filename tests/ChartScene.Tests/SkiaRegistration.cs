@@ -13,6 +13,7 @@ public static partial class AdditionalTests
         HeatmapLegendTests.Register(suite);
         IndexedResamplingTests.Register(suite);
         RangeNavigatorTests.Register(suite);
+        NavigatorReentrancyTests.Register(suite);
         GridPerformanceTests.Register(suite);
         DataIntegrityTests.Register(suite);
         HitTestIntegrityTests.Register(suite);
