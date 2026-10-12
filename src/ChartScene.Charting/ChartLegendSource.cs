@@ -138,10 +138,12 @@ public sealed class ChartLegendSource : ObservableObject, IDisposable
             _observed.Add(item, new(item, ++EntryCreationCount)); item.PropertyChanged += SeriesChanged;
         }
         var desired = series.Where(Includes).Select(item => _observed[item]).ToArray();
+        // Avoid repeated linear misses when a large set of new series is first bound.
+        var existingEntries = new HashSet<ChartLegendEntry>(_entries);
         for (int i = 0; i < desired.Length; i++)
         {
             if (i < _entries.Count && ReferenceEquals(_entries[i], desired[i])) continue;
-            int existing = _entries.IndexOf(desired[i]);
+            int existing = existingEntries.Contains(desired[i]) ? _entries.IndexOf(desired[i]) : -1;
             if (existing >= 0) _entries.Move(existing, i); else _entries.Insert(i, desired[i]);
             if (_pending) return;
         }
