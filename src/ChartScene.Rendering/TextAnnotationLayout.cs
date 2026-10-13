@@ -65,7 +65,7 @@ public sealed class TextAnnotationLayout
         var anchor=AnnotationGeometry.ToScreen(model,annotation,plot,annotation.X1,annotation.Y1);
         if(!anchor.IsFinite)return null;
         var style=new TextStyle(annotation.Stroke,annotation.FontSize,annotation.FontFamily,annotation.FontBold);
-        string[] text=annotation.Text.Replace("\r\n","\n",StringComparison.Ordinal).Replace('\r','\n').Split('\n');
+        string[] text=AnnotationTextContent.NormalizeLineEndings(annotation.Text).Split('\n');
         var metrics=new TextMetrics[text.Length];
         double width=0,ascent=0,descent=0,height=0;
         for(int i=0;i<text.Length;i++)

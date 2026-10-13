@@ -19,6 +19,7 @@ with sync_playwright() as p:
     def command(name):
         before=state()['actions'];click(name)
         page.wait_for_function('p=>window.chartSceneText.actions>p.before&&window.chartSceneText.lastAction===p.name',arg={'before':before,'name':name});ready()
+    def canonical(text):return text.replace('\r\n','\n').replace('\r','\n')
     def near(a,b):assert abs(a-b)<1e-7,(a,b)
     def pixels(name):
         ready();page.screenshot(path=str(out/(name+'.png')));b=state()['body'];assert b
@@ -38,6 +39,12 @@ with sync_playwright() as p:
     try:
         page.goto(args.url+'?view=text&inputTrace=1',wait_until='domcontentloaded');test('native annotation page starts without input',ready)
         test('rendered annotation text contains visible glyph pixels',lambda:pixels('text-dark'))
+        def unchanged():
+            before=state()
+            for _ in range(3):command('apply')
+            assert state()['text']==before['text'] and not state()['canUndo']
+            assert canonical(state()['editorText'])==before['text']
+        test('unchanged native multiline input creates no phantom history',unchanged)
         def anchors():
             start=state()['anchor']
             for h in ['Center','Right','Left']:
@@ -62,7 +69,7 @@ with sync_playwright() as p:
         test('font size weight and multiline alignment are live and undoable',typography)
         def text_edit():
             original=state()['text'];enter('text','First line\nSecond line\nThird line');command('apply');assert state()['text']=='First line\nSecond line\nThird line' and state()['lines']==3
-            command('undo');assert state()['text']==original;command('redo');assert state()['lines']==3;command('undo')
+            command('undo');assert state()['text']==original and canonical(state()['editorText'])==original;command('redo');assert state()['lines']==3 and canonical(state()['editorText'])==state()['text'];command('undo')
         test('native multiline text input applies undo and redo',text_edit)
         def empty():
             original=state()['text'];enter('text','');command('apply');assert state()['body'] is None and state()['lines']==0

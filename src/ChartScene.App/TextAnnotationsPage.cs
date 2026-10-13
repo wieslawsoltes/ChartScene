@@ -58,7 +58,7 @@ public sealed class TextAnnotationsPage:Page
         _text.Text=_label.Text;Register("text",_text);
         var panel=new StackPanel{Spacing=12};panel.Children.Add(new TextBlock{Text="ANNOTATION TEXT",FontSize=11,Opacity=.7});panel.Children.Add(_text);
         var apply=new ChartToolButton(ChartGlyph.Source,"Apply text");apply.Describe("Apply annotation text");Register("apply",apply);_buttons.Add("apply",apply);panel.Children.Add(apply);
-        apply.Click+=(_,_)=>{_actions++;_lastAction="apply";Edit("Annotation text",()=>_label.Text,v=>_label.Text=v,_text.Text);};
+        apply.Click+=(_,_)=>{_actions++;_lastAction="apply";ApplyText(_text.Text);};
         panel.Children.Add(new TextBlock{Text="Click or drag anywhere in the label, not just its anchor. Double-click opens the native text editor.\n\nAlignment, rotation, font changes and text edits share chart undo/redo.",FontSize=12,TextWrapping=TextWrapping.Wrap});
         _inspector.Child=new ScrollViewer{Content=panel,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};Grid.SetColumn(_inspector,1);_workspace.Children.Add(_inspector);Register("inspector",_inspector);
         Grid.SetRow(_workspace,1);_root.Children.Add(_workspace);Grid.SetRow(_status,2);_root.Children.Add(_status);Content=_root;
@@ -77,6 +77,20 @@ public sealed class TextAnnotationsPage:Page
         var before=get();if(EqualityComparer<T>.Default.Equals(before,value))return;
         _chart.Controller.History.Execute(new DelegateCommand(name,()=>set(value),()=>set(before)));
     }
+    private void ApplyText(string value)
+    {
+        // Native multiline TextBox returns CR separators. Unchanged text must not
+        // become a history entry merely because its separator representation changed.
+        if (AnnotationTextContent.Equivalent(_label.Text, value)) return;
+        Edit("Annotation text", () => _label.Text, SetText, AnnotationTextContent.NormalizeLineEndings(value));
+    }
+    private void SetText(string value)
+    {
+        _label.Text = value;
+        // Synchronize Apply and Undo/Redo, not every render: styling and pointer
+        // movement must never replace a draft the user is still typing.
+        _text.Text = value;
+    }
     private async void OpenEditor(ChartAnnotation annotation)
     {
         if(_dialog is not null||!IsLoaded||!ReferenceEquals(annotation,_label))return;
@@ -84,7 +98,7 @@ public sealed class TextAnnotationsPage:Page
         var dialog=new ContentDialog{Title="Edit annotation text",Content=input,PrimaryButtonText="Apply",CloseButtonText="Cancel",XamlRoot=XamlRoot};_dialog=dialog;
         try
         {
-            if(await dialog.ShowAsync()==ContentDialogResult.Primary)Edit("Annotation text",()=>_label.Text,v=>_label.Text=v,input.Text);
+            if(await dialog.ShowAsync()==ContentDialogResult.Primary)ApplyText(input.Text);
             _text.Text=_label.Text;
         }
         catch(Exception error){_error=error.Message;}
@@ -137,13 +151,13 @@ public sealed class TextAnnotationsPage:Page
             _label.RotationAngle,_label.FontSize,_label.FontBold,_label.TextAlignment.ToString(),_label.Background is not null,_model.Theme.Name,
             _label.IsSelected,_label.X1,_label.Y1,_chart.FrameCount,_chart.Controller.History.CanUndo,_chart.Controller.History.CanRedo,_dialog is not null,
             _actions,_lastAction,layout is null?null:Rect(layout.Bounds),layout is null?null:Point(layout.Anchor),layout?.Corners.Select(Point).ToArray()??[],layout?.Lines.Count??0,
-            _controls.ToDictionary(p=>p.Key,p=>Bounds(p.Value)));
+            _controls.ToDictionary(p=>p.Key,p=>Bounds(p.Value)),_text.Text);
         Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.chartSceneText="+JsonSerializer.Serialize(snapshot,TextPageJsonContext.Default.TextPageSnapshot));
 #endif
     }
 }
 public sealed record TextPointDto(double x,double y);
 public sealed record TextPageSnapshot(bool ready,string? error,string text,string horizontal,string vertical,double rotation,double fontSize,bool bold,string alignment,bool background,string theme,
-    bool selected,double x1,double y1,long frames,bool canUndo,bool canRedo,bool dialog,long actions,string lastAction,ControlBounds? body,TextPointDto? anchor,TextPointDto[] corners,int lines,Dictionary<string,ControlBounds?> controls);
+    bool selected,double x1,double y1,long frames,bool canUndo,bool canRedo,bool dialog,long actions,string lastAction,ControlBounds? body,TextPointDto? anchor,TextPointDto[] corners,int lines,Dictionary<string,ControlBounds?> controls,string editorText);
 [JsonSerializable(typeof(TextPageSnapshot))]
 public partial class TextPageJsonContext:JsonSerializerContext;

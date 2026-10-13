@@ -2,6 +2,7 @@ public static partial class AdditionalTests
 {
     static partial void RegisterSerialization(TestSuite suite)
     {
+        AnnotationTextContentTests.Register(suite);
         TextAnnotationTests.Register(suite);
         TextAnnotationMarginTests.Register(suite);
         PlotLayoutTests.Register(suite);
