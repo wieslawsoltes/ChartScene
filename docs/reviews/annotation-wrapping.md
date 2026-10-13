@@ -44,7 +44,10 @@ metrics. Every emitted substring is measured. Review found that removing a
 separator can change contextual shaping, so Wrap falls back to its measured
 fitting prefix when the preferred shorter word break becomes wider. Invalid
 metrics during any prefix measurement discard the whole layout, not a partial
-published body. Regression cases exercise both behaviors.
+published body. Regression cases exercise both behaviors. A further review caught
+leading indentation being mistaken for a word boundary in WrapWithOverflow;
+spaces or tabs before the first word now stay with that indivisible word when
+part of the word fits, rather than emitting a broken prefix.
 
 ## Native workbench
 

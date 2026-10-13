@@ -32,11 +32,11 @@ internal static class AnnotationTextWrapper
                 {
                     int separator=IsSeparator(end)?end:end-1;
                     while(separator>=start&&!IsSeparator(separator))separator--;
-                    if(separator>start)
-                    {
-                        end=separator;
-                        while(end>start&&IsSeparator(end-1))end--;
-                    }
+                    int wordBreak=separator;
+                    while(wordBreak>start&&IsSeparator(wordBreak-1))wordBreak--;
+                    // Leading indentation is not a break after a complete word.
+                    // In overflow mode keep the first word intact, including that indent.
+                    if(wordBreak>start)end=wordBreak;
                     else if(wrapping==AnnotationTextWrapping.WrapWithOverflow)
                     {
                         // No legal word break fits: keep this entire word intact.
