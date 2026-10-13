@@ -56,7 +56,7 @@ public static class TextWrappingTests
         {
             var a=Label("supercalifragilistic tiny word",AnnotationTextWrapping.WrapWithOverflow,40);using var m=Model(a);
             var l=Measure(new MeasureCanvas(),m,a);Lines(l,"supercalifragilistic","tiny","word");
-            TestSuite.Near(l!.LocalBounds.Width,190);
+            TestSuite.Near(l!.LocalBounds.Width,200); // 20 ASCII graphemes at 10 pixels each
         });
         foreach(string cluster in new[]{"e\u0301","\U0001F680","\U0001F1F5\U0001F1F1","\U0001F469\u200D\U0001F4BB","\u0E01\u0E33"})
             suite.Run("annotation soft wrap preserves grapheme "+cluster,()=>
