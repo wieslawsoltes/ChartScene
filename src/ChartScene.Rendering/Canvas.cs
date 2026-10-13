@@ -4,7 +4,13 @@ using ChartScene.Charting;
 namespace ChartScene.Rendering;
 
 public readonly record struct StrokeStyle(ColorRgba Color,double Width=1,double[]? Dash=null);
-public readonly record struct TextStyle(ColorRgba Color,double Size=12,string Family="Arial",bool Bold=false);
+public readonly record struct TextStyle(ColorRgba Color,double Size=12,string Family="Arial",bool Bold=false)
+{
+    /// <summary>Zero uses the legacy Bold flag (700/400); an explicit weight in [1,1000] takes precedence.</summary>
+    public int Weight { get; init; }
+    public FontSlant Slant { get; init; }
+    public int EffectiveWeight => Weight==0?(Bold?700:400):Weight;
+}
 public readonly record struct TextMetrics(double Width,double Height,double Ascent,double Descent);
 public enum TextAlignment { Left,Center,Right }
 public enum PathVerb { Move,Line,Cubic,Close }

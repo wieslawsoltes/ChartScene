@@ -15,7 +15,8 @@ public class ChartAnnotation:ObservableObject
     private VerticalAnchorPoint _verticalAnchor=VerticalAnchorPoint.Baseline;
     private AnnotationTextAlignment _textAlignment;
     private string _fontFamily="Arial";
-    private bool _fontBold;
+    private int _fontWeight=400;
+    private FontSlant _fontSlant;
     private double _rotationAngle,_textPadding,_borderThickness,_lineSpacing=1;
     private ColorRgba? _background,_borderColor;
     public HorizontalAnchorPoint HorizontalAnchorPoint { get=>_horizontalAnchor; set { CheckEnum(value); Set(ref _horizontalAnchor,value); } }
@@ -23,7 +24,20 @@ public class ChartAnnotation:ObservableObject
     public VerticalAnchorPoint VerticalAnchorPoint { get=>_verticalAnchor; set { CheckEnum(value); Set(ref _verticalAnchor,value); } }
     public AnnotationTextAlignment TextAlignment { get=>_textAlignment; set { CheckEnum(value); Set(ref _textAlignment,value); } }
     public string FontFamily { get=>_fontFamily; set { if(string.IsNullOrWhiteSpace(value)) throw new ArgumentException("A font family is required.",nameof(value)); Set(ref _fontFamily,value); } }
-    public bool FontBold { get=>_fontBold; set=>Set(ref _fontBold,value); }
+    /// <summary>OpenType-style weight in [1,1000]; 400 is normal and 700 is bold.</summary>
+    public int FontWeight
+    {
+        get=>_fontWeight;
+        set
+        {
+            if(value is <1 or >1000) throw new ArgumentOutOfRangeException(nameof(value));
+            bool wasBold=FontBold;
+            if(Set(ref _fontWeight,value) && wasBold!=FontBold) RaisePropertyChanged(nameof(FontBold));
+        }
+    }
+    /// <summary>Compatibility shortcut. Assigning selects 700/400; use FontWeight for other weights.</summary>
+    public bool FontBold { get=>_fontWeight>=700; set=>FontWeight=value?700:400; }
+    public FontSlant FontSlant { get=>_fontSlant; set { CheckEnum(value); Set(ref _fontSlant,value); } }
     /// <summary>Clockwise screen rotation around the X1/Y1 anchor, in degrees.</summary>
     public double RotationAngle { get=>_rotationAngle; set { Finite(value); Set(ref _rotationAngle,value%360); } }
     public double TextPadding { get=>_textPadding; set { Finite(value); if(value<0) throw new ArgumentOutOfRangeException(nameof(value)); Set(ref _textPadding,value); } }
