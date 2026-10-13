@@ -1,0 +1,115 @@
+name: Validation evidence
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/validation-evidence.yml'
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Completed Application run to inspect (blank selects latest completed run)'
+        required: false
+        type: string
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+jobs:
+  evidence:
+    # Never grant this reporting job to a fork or run downloaded application code.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Resolve a completed application run
+        id: select
+        uses: actions/github-script@v7
+        env:
+          REQUESTED_RUN: ${{ inputs.run_id }}
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            const requested = process.env.REQUESTED_RUN || '';
+            let run;
+            if (requested) {
+              if (!/^\d+$/.test(requested)) throw new Error('run_id must be numeric');
+              run = (await github.rest.actions.getWorkflowRun({owner, repo, run_id: requested})).data;
+            } else {
+              const branch = context.payload.pull_request?.head.ref;
+              const runs = (await github.rest.actions.listWorkflowRuns({owner, repo,
+                workflow_id: 'application.yml', status: 'completed', per_page: 30,
+                ...(branch ? {branch} : {})})).data.workflow_runs;
+              run = runs[0];
+            }
+            if (!run || run.status !== 'completed' || run.path !== '.github/workflows/application.yml')
+              throw new Error('A completed Application workflow run is required');
+            const artifacts = (await github.rest.actions.listWorkflowRunArtifacts({owner, repo, run_id: run.id})).data.artifacts;
+            const artifact = artifacts.find(a => a.name === 'application-validation' && !a.expired);
+            if (!artifact) throw new Error('No retained application-validation artifact');
+            if (artifact.size_in_bytes > 100 * 1024 * 1024) throw new Error('Evidence archive exceeds report limit');
+            core.setOutput('run', String(run.id));
+            core.setOutput('sha', run.head_sha);
+            core.setOutput('conclusion', run.conclusion);
+            core.setOutput('digest', artifact.digest || 'not supplied');
+      - uses: actions/download-artifact@v4
+        with:
+          name: application-validation
+          path: evidence
+          run-id: ${{ steps.select.outputs.run }}
+          github-token: ${{ github.token }}
+      - name: Summarize saved results without executing archive content
+        uses: actions/github-script@v7
+        env:
+          EVIDENCE_RUN: ${{ steps.select.outputs.run }}
+          EVIDENCE_SHA: ${{ steps.select.outputs.sha }}
+          EVIDENCE_CONCLUSION: ${{ steps.select.outputs.conclusion }}
+          EVIDENCE_DIGEST: ${{ steps.select.outputs.digest }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const files = [];
+            function visit(folder, depth = 0) {
+              if (depth > 6) return;
+              for (const entry of fs.readdirSync(folder, {withFileTypes:true})) {
+                const file = path.join(folder, entry.name);
+                if (entry.isDirectory()) visit(file, depth + 1);
+                else if (entry.isFile() && entry.name.endsWith('.json')) files.push(file);
+              }
+            }
+            visit('evidence');
+            const read = file => {
+              if (fs.statSync(file).size > 2 * 1024 * 1024) return {omitted:'JSON larger than 2 MiB'};
+              return JSON.parse(fs.readFileSync(file, 'utf8'));
+            };
+            const failures = [], suites = [];
+            for (const file of files.filter(f => path.basename(f) === 'results.json')) {
+              const result = read(file);
+              suites.push({suite:path.dirname(file), total:result.total, failed:result.failed});
+              for (const test of result.tests || []) if (!test.passed) {
+                const stem = test.name.replaceAll(' ', '-');
+                const stateFile = path.join(path.dirname(file), stem + '-state.json');
+                failures.push({suite:path.dirname(file), test,
+                  state:fs.existsSync(stateFile) ? read(stateFile) : null});
+              }
+            }
+            const report = {sourceRun:process.env.EVIDENCE_RUN, sourceCommit:process.env.EVIDENCE_SHA,
+              sourceConclusion:process.env.EVIDENCE_CONCLUSION, artifactDigest:process.env.EVIDENCE_DIGEST, suites, failures};
+            fs.writeFileSync('validation-evidence.json', JSON.stringify(report, null, 2));
+            // Build a bounded human-readable report. Full evidence stays in the source artifact.
+            let body = '### Preserved Application evidence\n\nRun `' + report.sourceRun + '`; source `' + report.sourceCommit + '`; conclusion `' + report.sourceConclusion + '`.\n\n';
+            body += suites.map(s => s.suite + ': ' + s.total + ' cases, ' + s.failed + ' failed').join('\n') + '\n\n';
+            for (const failure of failures.slice(0, 12)) {
+              const detail = JSON.stringify(failure, null, 2).replaceAll('`', '\\u0060').replaceAll('@', '\\u0040');
+              body += '```json\n' + detail.slice(0, 9000) + '\n```\n';
+              if (body.length > 45000) break;
+            }
+            body += '\nThis report reads existing results only. It does not retry, waive or satisfy any validation gate.\n';
+            await core.summary.addRaw(body).write();
+            console.log(body);
+            if (context.payload.pull_request) await github.rest.issues.createComment({...context.repo,
+              issue_number:context.payload.pull_request.number, body});
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validation-evidence-report
+          path: validation-evidence.json
+          if-no-files-found: error
