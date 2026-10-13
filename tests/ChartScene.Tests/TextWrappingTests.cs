@@ -103,6 +103,18 @@ public static class TextWrappingTests
                 l.Draw(c);TestSuite.True(c.Recorder.Commands.Where(x=>x.Kind=="text").Select(x=>x.Text).SequenceEqual(new[]{"one two","three"}));
                 TestSuite.True(double.IsPositiveInfinity(l.HitDistance(new(-10,-10))));
             });
+        suite.Run("annotation soft break remeasures contextual shaping without overflowing",()=>
+        {
+            var a=Label("abc def",width:30);using var m=Model(a);
+            var c=new MeasureCanvas(text=>new(text switch{"abc "=>28,"abc"=>40,_=>text.Length*10},20,15,5));
+            var l=Measure(c,m,a)!;Lines(l,"abc ","def");TestSuite.Near(l.LocalBounds.Width,30);
+        });
+        suite.Run("annotation invalid prefix measurement never publishes partial wrapped geometry",()=>
+        {
+            var a=Label("one two three",width:30);using var m=Model(a);
+            var c=new MeasureCanvas(text=>new(text=="on"?double.NaN:text.Length*10,20,15,5));
+            TestSuite.True(Measure(c,m,a) is null);TestSuite.Equal(a.Text,"one two three");
+        });
         suite.Run("annotation wrapped layout owns immutable width and rendered lines",()=>
         {
             var a=Label("one two three");using var m=Model(a);var c=new MeasureCanvas();var old=Measure(c,m,a)!;

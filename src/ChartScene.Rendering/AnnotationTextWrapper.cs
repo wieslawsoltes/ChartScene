@@ -46,6 +46,14 @@ internal static class AnnotationTextWrapper
                 if(end<=start)end=fit; // whitespace-only lines still make progress
                 var line=MeasureLine(Slice(start,end));
                 if(line is null)return null;
+                // Removing a separator can change shaping; a shorter substring
+                // is not necessarily narrower. Keep the already fitted prefix
+                // instead of publishing an accidental multi-grapheme overflow.
+                if(wrapping==AnnotationTextWrapping.Wrap&&end<fit&&line.Value.Metrics.Width>maxWidth)
+                {
+                    end=fit;line=MeasureLine(Slice(start,end));
+                    if(line is null)return null;
+                }
                 lines.Add(line.Value);
                 start=end;
                 // Whitespace at an AUTOMATIC line break is not painted. Hard paragraph
