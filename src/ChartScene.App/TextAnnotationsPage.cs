@@ -15,7 +15,7 @@ using Windows.Foundation;
 namespace ChartScene.App;
 
 /// <summary>Native text annotation controls backed by the same measured geometry used for rendering and input.</summary>
-public sealed class TextAnnotationsPage:Page
+public sealed partial class TextAnnotationsPage:Page
 {
     private readonly Grid _root=new(),_workspace=new();
     private readonly ChartSurface _chart=new();
@@ -46,7 +46,8 @@ public sealed class TextAnnotationsPage:Page
         Add("vertical",ChartGlyph.Columns,"V: Top",()=>Edit("Vertical anchor",()=>_label.VerticalAnchorPoint,v=>_label.VerticalAnchorPoint=v,(VerticalAnchorPoint)(((int)_label.VerticalAnchorPoint+1)%3)));
         Add("align",ChartGlyph.Menu,"Align",()=>Edit("Multiline alignment",()=>_label.TextAlignment,v=>_label.TextAlignment=v,(AnnotationTextAlignment)(((int)_label.TextAlignment+1)%3)));
         Add("rotate",ChartGlyph.Undo,"Rotate",()=>Edit("Text rotation",()=>_label.RotationAngle,v=>_label.RotationAngle=v,(_label.RotationAngle+30)%360));
-        Add("bold",ChartGlyph.Annotate,"Bold",()=>Edit("Text weight",()=>_label.FontBold,v=>_label.FontBold=v,!_label.FontBold));
+        Add("bold",ChartGlyph.TextBold,"Bold",()=>Edit("Text weight",()=>_label.FontWeight,v=>_label.FontWeight=v,_label.FontBold?400:700));
+        Add("italic",ChartGlyph.TextItalic,"Italic",()=>Edit("Text style",()=>_label.FontSlant,v=>_label.FontSlant=v,_label.FontSlant==FontSlant.Italic?FontSlant.Normal:FontSlant.Italic));
         Add("font",ChartGlyph.Plus,"20 px",()=>Edit("Font size",()=>_label.FontSize,v=>_label.FontSize=v,_label.FontSize==32?16:_label.FontSize+4));
         Add("background",ChartGlyph.Grid,"Panel",()=>Edit("Text background",()=>_label.Background,v=>_label.Background=v,_label.Background is null?(ColorRgba?)_model.Theme.Background:null));
         Add("flip",ChartGlyph.Forward,"Flip Y",()=>Edit("Axis direction",()=>_model.YAxis.FlippedCoordinates,v=>_model.YAxis.FlippedCoordinates=v,!_model.YAxis.FlippedCoordinates));
@@ -63,6 +64,7 @@ public sealed class TextAnnotationsPage:Page
         var revert=new ChartToolButton(ChartGlyph.Undo,"Revert draft");revert.Describe("Discard unapplied text changes");Register("revert",revert);_buttons.Add("revert",revert);panel.Children.Add(revert);
         revert.Click+=(_,_)=>{_actions++;_lastAction="revert";_text.Text=_label.Text;RefreshDraft();Publish();};
         panel.Children.Add(_draftStatus);
+        BuildTypographyInspector(panel);
         _text.TextChanged+=(_,_)=>{RefreshDraft();Publish();};RefreshDraft();
         panel.Children.Add(new TextBlock{Text="Click or drag anywhere in the label, not just its anchor. Double-click opens the native text editor.\n\nAlignment, rotation, font changes and text edits share chart undo/redo. Revert discards only the unapplied inspector draft.",FontSize=12,TextWrapping=TextWrapping.Wrap});
         _inspector.Child=new ScrollViewer{Content=panel,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};Grid.SetColumn(_inspector,1);_workspace.Children.Add(_inspector);Register("inspector",_inspector);
@@ -108,6 +110,7 @@ public sealed class TextAnnotationsPage:Page
     {
         if(_dialog is not null||!IsLoaded||!ReferenceEquals(annotation,_label))return;
         var input=new TextBox{Text=annotation.Text,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinWidth=300,Height=130,MaxLength=4096};Register("dialog-text",input);
+        ApplyInputTypography(input);
         var dialog=new ContentDialog{Title="Edit annotation text",Content=input,PrimaryButtonText="Apply",CloseButtonText="Cancel",XamlRoot=XamlRoot};_dialog=dialog;
         try
         {
@@ -132,6 +135,9 @@ public sealed class TextAnnotationsPage:Page
     {
         _buttons["horizontal"].Label="H: "+_label.HorizontalAnchorPoint;_buttons["vertical"].Label="V: "+_label.VerticalAnchorPoint;
         _buttons["font"].Label=_label.FontSize+" px";_buttons["bold"].IsActive=_label.FontBold;_buttons["background"].IsActive=_label.Background is not null;_buttons["flip"].IsActive=_model.YAxis.FlippedCoordinates;
+        _buttons["italic"].IsActive=_label.FontSlant==FontSlant.Italic;
+        _buttons["align"].Glyph=_label.TextAlignment switch{AnnotationTextAlignment.Center=>ChartGlyph.TextAlignCenter,AnnotationTextAlignment.Right=>ChartGlyph.TextAlignRight,_=>ChartGlyph.TextAlignLeft};
+        RefreshTypography();
         _buttons["undo"].IsEnabled=_chart.Controller.History.CanUndo;_buttons["redo"].IsEnabled=_chart.Controller.History.CanRedo;
         _status.Text=string.IsNullOrEmpty(_error)?$"{_label.HorizontalAnchorPoint} / {_label.VerticalAnchorPoint} · {_label.RotationAngle}° · {_label.FontSize} px · Drag body or double-click to edit":_error;
         RefreshDraft();
@@ -166,13 +172,13 @@ public sealed class TextAnnotationsPage:Page
             _label.RotationAngle,_label.FontSize,_label.FontBold,_label.TextAlignment.ToString(),_label.Background is not null,_model.Theme.Name,
             _label.IsSelected,_label.X1,_label.Y1,_chart.FrameCount,_chart.Controller.History.CanUndo,_chart.Controller.History.CanRedo,_dialog is not null,
             _actions,_lastAction,layout is null?null:Rect(layout.Bounds),layout is null?null:Point(layout.Anchor),layout?.Corners.Select(Point).ToArray()??[],layout?.Lines.Count??0,
-            _controls.ToDictionary(p=>p.Key,p=>Bounds(p.Value)),_text.Text,HasDraft,_buttons["revert"].IsEnabled);
+            _controls.ToDictionary(p=>p.Key,p=>Bounds(p.Value)),_text.Text,HasDraft,_buttons["revert"].IsEnabled,Typography());
         Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.chartSceneText="+JsonSerializer.Serialize(snapshot,TextPageJsonContext.Default.TextPageSnapshot));
 #endif
     }
 }
 public sealed record TextPointDto(double x,double y);
 public sealed record TextPageSnapshot(bool ready,string? error,string text,string horizontal,string vertical,double rotation,double fontSize,bool bold,string alignment,bool background,string theme,
-    bool selected,double x1,double y1,long frames,bool canUndo,bool canRedo,bool dialog,long actions,string lastAction,ControlBounds? body,TextPointDto? anchor,TextPointDto[] corners,int lines,Dictionary<string,ControlBounds?> controls,string editorText,bool hasDraft,bool revertEnabled);
+    bool selected,double x1,double y1,long frames,bool canUndo,bool canRedo,bool dialog,long actions,string lastAction,ControlBounds? body,TextPointDto? anchor,TextPointDto[] corners,int lines,Dictionary<string,ControlBounds?> controls,string editorText,bool hasDraft,bool revertEnabled,TextTypographySnapshot typography);
 [JsonSerializable(typeof(TextPageSnapshot))]
 public partial class TextPageJsonContext:JsonSerializerContext;

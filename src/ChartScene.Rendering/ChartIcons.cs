@@ -2,7 +2,7 @@ using ChartScene.Core;
 
 namespace ChartScene.Rendering;
 
-public enum ChartGlyph { Back, Forward, Home, Menu, Search, Fit, Pan, Select, Annotate, Cursor, Plus, Minus, Play, Pause, Undo, Redo, Source, Download, Info, Close, Star, Line, Columns, Surface, Grid, Settings }
+public enum ChartGlyph { Back, Forward, Home, Menu, Search, Fit, Pan, Select, Annotate, Cursor, Plus, Minus, Play, Pause, Undo, Redo, Source, Download, Info, Close, Star, Line, Columns, Surface, Grid, Settings, TextBold, TextItalic, TextAlignLeft, TextAlignCenter, TextAlignRight }
 
 /// <summary>Independent, resolution-neutral line icons shared by chart controls and raster tests.</summary>
 public static class ChartIconRenderer
@@ -50,6 +50,11 @@ public static class ChartIconRenderer
             case ChartGlyph.Columns: Path(false,3,3,3,21,22,21);Path(true,6,20,6,12,9,12,9,20);Path(true,12,20,12,5,15,5,15,20);Path(true,18,20,18,9,21,9,21,20);break;
             case ChartGlyph.Surface: Path(true,12,2,22,8,22,17,12,23,2,17,2,8);Path(false,2,8,12,14,22,8);L(12,14,12,23);Path(false,3,14,8,10,13,12,18,6);break;
             case ChartGlyph.Grid: for(int i=4;i<=20;i+=8){L(i,4,i,20);L(4,i,20,i);}break;
+            case ChartGlyph.TextBold: L(6,4,6,20);Path(false,6,4,14,4,18,7,18,9,14,12,6,12);Path(false,14,12,19,15,19,17,15,20,6,20);break;
+            case ChartGlyph.TextItalic: L(10,4,20,4);L(4,20,14,20);L(15,4,9,20);break;
+            case ChartGlyph.TextAlignLeft: L(4,5,20,5);L(4,10,14,10);L(4,15,20,15);L(4,20,14,20);break;
+            case ChartGlyph.TextAlignCenter: L(4,5,20,5);L(7,10,17,10);L(4,15,20,15);L(7,20,17,20);break;
+            case ChartGlyph.TextAlignRight: L(4,5,20,5);L(10,10,20,10);L(4,15,20,15);L(10,20,20,20);break;
             case ChartGlyph.Settings: L(4,5,20,5);L(4,12,20,12);L(4,19,20,19);L(8,2,8,8);L(16,9,16,15);L(10,16,10,22);break;
         }
     }
