@@ -35,18 +35,23 @@ with sync_playwright() as p:
     def visible(identifier, value):
         page.wait_for_function('p=>window.chartSceneLegends.series.find(s=>s.id===p.id)?.visible===p.value&&window.chartSceneLegends.ready',arg={'id':identifier,'value':value})
     def toggle(identifier):
-        # Model readiness can precede reattachment/layout of retained native rows.
-        # Observe the actual checkbox bounds before issuing one input action; never
-        # force layout or click an old rectangle from a filtered-out generation.
+        # Nonempty bounds are not enough when filtering shifts retained native rows.
+        # Acknowledge this checkbox's stable identity, never just its parent legend.
         page.wait_for_function("""id => {
             const s = window.chartSceneLegends;
             if (s?.error) throw new Error(s.error);
             const row = s?.entries.find(e => e.id === id);
             return s?.ready && row?.checkbox?.width > 0 && row.checkbox.height > 0;
         }""", arg=identifier)
-        row = entries()[identifier]; old = row['visible']; b = row['checkbox']
-        inputs.click('legends-legend', b, resolve=lambda: entries().get(identifier, {}).get('checkbox'))
+        row = entries()[identifier]; old = row['visible']; identity = row['identity']
+        before = {s['id']:s['visible'] for s in state()['series']}
+        def resolve():
+            current = entries().get(identifier, {})
+            return current.get('checkbox') if current.get('identity') == identity else None
+        inputs.click('legends-checkbox-'+str(identity), row['checkbox'], resolve=resolve)
         visible(identifier, not old)
+        after = {s['id']:s['visible'] for s in state()['series']}
+        assert all(after[key] == value for key,value in before.items() if key != identifier), (identifier,before,after)
     def module(name):
         key='gallery-'+name
         resolve=lambda: page.evaluate('key=>window.chartSceneGallery.controls[key]',key)
@@ -173,7 +178,7 @@ with sync_playwright() as p:
                 assert identities()==before and state()['rowsCreated']==created
         test('empty filtered legends remain valid and recover',empty)
         def reattach():
-            before=state(); assert all(e['visible'] for e in before['entries'])
+            before=state(); assert before['filter']=='All' and all(s['visible'] for s in before['series'])
             module('linked');module('legends');ready();after=state()
             assert after['generation']==before['generation'] and after['series']==before['series']
             toggle('sine');command('undo');visible('sine',True)
