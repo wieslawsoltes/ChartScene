@@ -144,7 +144,7 @@ public sealed partial class TextAnnotationsPage:Page
         RefreshTypography();
         RefreshWrapping();
         _buttons["undo"].IsEnabled=_chart.Controller.History.CanUndo;_buttons["redo"].IsEnabled=_chart.Controller.History.CanRedo;
-        _status.Text=string.IsNullOrEmpty(_error)?$"{_label.HorizontalAnchorPoint} / {_label.VerticalAnchorPoint} · {_label.RotationAngle}° · {_label.FontSize} px · {_label.TextWrapWidth:0.##} px wrap · Drag round grip to resize":_error;
+        _status.Text=string.IsNullOrEmpty(_error)?$"{_label.HorizontalAnchorPoint} / {_label.VerticalAnchorPoint} · {_label.RotationAngle}° · {_label.FontSize} px · {WidthHint()}":_error;
         RefreshDraft();
     }
     private static FrameworkElement? Find(DependencyObject root,string name)

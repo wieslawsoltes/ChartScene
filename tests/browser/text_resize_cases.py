@@ -71,6 +71,15 @@ def run_resize_cases(page,out,state,ready,command,choose,enter,test,pixels,near)
         before=drag(0);near(state()['wrapping']['width'],before['wrapping']['width']);assert state()['canRedo']
     test('stationary width grip click preserves the existing redo branch',stationary)
 
+    def double_grip():
+        before=state();p=grip();sequence=page.evaluate('window.chartSceneInput?.sequence||0')
+        page.mouse.dblclick(p['x'],p['y'],delay=40)
+        page.wait_for_function("s=>(window.chartSceneInputEvents||[]).some(e=>e.sequence>s&&e.target==='text-chart'&&e.kind==='doubletap')",arg=sequence)
+        page.wait_for_function('!window.chartSceneText.resize.active');ready()
+        assert not state()['dialog'] and state()['body']==before['body'] and state()['anchor']==before['anchor']
+        near(state()['wrapping']['width'],before['wrapping']['width'])
+    test('native width grip double tap does not open body editor or zoom',double_grip)
+
     def compact_properties():
         original=state()['text'];draft='Compact inspector keeps this draft'
         page.set_viewport_size({'width':920,'height':740})

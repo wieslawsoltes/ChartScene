@@ -29,6 +29,9 @@ public sealed partial class TextAnnotationsPage
         _inspector.KeyDown+=(_,e)=>{if(e.Key==VirtualKey.Escape&&CompactInspector&&InspectorOpen){CloseInspector();e.Handled=true;}};
         return content;
     }
+    private string WidthHint()=>_label.TextWrapping==ChartScene.Charting.AnnotationTextWrapping.NoWrap
+        ? "Drag body to move · Enable wrapping for a width grip"
+        : $"{_label.TextWrapWidth:0.##} px wrap · Select and drag the round width grip";
     private void ToggleInspector()
     {
         if(CompactInspector)_compactInspectorOpen=!_compactInspectorOpen;else _wideInspectorClosed=!_wideInspectorClosed;

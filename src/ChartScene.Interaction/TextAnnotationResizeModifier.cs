@@ -44,14 +44,18 @@ public sealed class TextAnnotationResizeModifier:ChartModifier,IChartCursorOwner
             }
             return ModifierResult.Handled;
         }
-        if(!IsEnabled||controller.HasCapture||input.Kind!=ChartInputKind.Down||!input.Position.IsFinite||controller.Frame is not { } frame
-            ||frame.Statistics.ModelRevision!=controller.Model.Revision)return ModifierResult.Unhandled;
+        if(!IsEnabled||controller.HasCapture||input.Kind is not (ChartInputKind.Down or ChartInputKind.DoubleClick)||!input.Position.IsFinite||controller.Frame is not { } frame
+            ||input.Kind==ChartInputKind.Down&&frame.Statistics.ModelRevision!=controller.Model.Revision)return ModifierResult.Unhandled;
         // Frame order is paint order, including annotation layers. No reversed iterator or per-candidate measurement.
         for(int index=frame.TextAnnotations.Count-1;index>=0;index--)
         {
             var region=frame.TextAnnotations[index];var a=region.Annotation;
             if(!a.IsVisible||!a.IsEditable||!a.IsSelected||a.TextWrapping==AnnotationTextWrapping.NoWrap
                 ||!region.Layout.HitWidthGrip(input.Position,_hitRadius)||!controller.Model.Annotations.Contains(a))continue;
+            // A native double tap on an adorner is not a request to edit the body.
+            // As with body editing, the painted grip remains authoritative while a
+            // selection-only change is waiting for its next frame.
+            if(input.Kind==ChartInputKind.DoubleClick)return ModifierResult.Handled;
             var session=new Session(this,controller,a,region.Layout,input);
             _session=session;session.Attach();
             controller.View.Cursor=null;controller.View.Hits=[];
