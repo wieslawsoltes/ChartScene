@@ -19,16 +19,16 @@ with sync_playwright() as p:
     def command(name):
         before=state()['actions'];click(name)
         page.wait_for_function('p=>window.chartSceneText.actions>p.before&&window.chartSceneText.lastAction===p.name',arg={'before':before,'name':name});ready()
-    def choose(name,index):
-        field=name+'Choice'
-        if not state()['typography'][field]['open']:click(name)
-        page.wait_for_function('f=>window.chartSceneText.typography[f].open&&window.chartSceneText.typography[f].focusedIndex>=0',arg=field)
-        page.keyboard.press('Home');page.wait_for_function('f=>window.chartSceneText.typography[f].focusedIndex===0',arg=field)
+    def choose(name,index,section='typography'):
+        field=name+'Choice';key={'section':section,'field':field}
+        if not state()[section][field]['open']:click(name)
+        page.wait_for_function('k=>{const c=window.chartSceneText[k.section][k.field];return c.open&&c.focusedIndex>=0}',arg=key)
+        page.keyboard.press('Home');page.wait_for_function('k=>window.chartSceneText[k.section][k.field].focusedIndex===0',arg=key)
         for position in range(index):
             page.keyboard.press('ArrowDown')
-            page.wait_for_function('p=>window.chartSceneText.typography[p.f].focusedIndex===p.i',arg={'f':field,'i':position+1})
+            page.wait_for_function('k=>window.chartSceneText[k.section][k.field].focusedIndex===k.index',arg={**key,'index':position+1})
         page.keyboard.press('Enter')
-        page.wait_for_function('p=>!window.chartSceneText.typography[p.f].open&&window.chartSceneText.typography[p.f].selectedIndex===p.i',arg={'f':field,'i':index});ready()
+        page.wait_for_function('k=>{const c=window.chartSceneText[k.section][k.field];return !c.open&&c.selectedIndex===k.index}',arg={**key,'index':index});ready()
     def canonical(text):return text.replace('\r\n','\n').replace('\r','\n')
     def near(a,b):assert abs(a-b)<1e-7,(a,b)
     def pixels(name):
@@ -74,8 +74,10 @@ with sync_playwright() as p:
         test('rotated label corners use the anchor as pivot',rotation)
         def typography():
             before=state()['body'];command('bold');assert state()['bold'];command('font');assert state()['fontSize']==24 and state()['body']['width']>before['width']
-            command('undo');near(state()['fontSize'],20);command('undo');assert not state()['bold']
-            for align in ['Center','Right','Left']:command('align');assert state()['alignment']==align
+            assert state()['typography']['input']['fontSize']==24
+            command('undo');near(state()['fontSize'],20);assert state()['typography']['input']['fontSize']==20;command('undo');assert not state()['bold']
+            for align in ['Center','Right','Left']:
+                command('align');assert state()['alignment']==align and state()['typography']['input']['alignment']==align
         test('font size weight and multiline alignment are live and undoable',typography)
         def family_choice():
             choose('family',1);assert state()['typography']['family']=='Georgia';pixels('text-georgia')
@@ -101,6 +103,34 @@ with sync_playwright() as p:
             command('undo');command('undo');assert canonical(state()['editorText'])==draft
             command('revert');assert not state()['hasDraft']
         test('font controls preserve separate unapplied annotation text',typography_draft)
+        def soft_wrap():
+            before=state();assert not before['wrapping']['widthEnabled']
+            choose('wrap',1,'wrapping');s=state()
+            assert s['wrapping']['mode']=='Wrap' and s['wrapping']['widthEnabled'] and s['text']==before['text']
+            assert s['lines']>before['lines'];near(s['body']['width'],176);assert s['anchor']==before['anchor'];pixels('text-wrapped')
+            command('undo');assert state()['wrapping']['mode']=='NoWrap';assert state()['body']==before['body']
+            command('redo');near(state()['body']['width'],176);command('undo')
+        test('native wrapping preserves source anchor and exact undo redo',soft_wrap)
+        def wrap_width():
+            choose('wrap',1,'wrapping');before=state();choose('wrapWidth',0,'wrapping');s=state()
+            near(s['wrapping']['width'],80);near(s['body']['width'],96);assert s['lines']>before['lines']
+            command('rotate');assert state()['lines']==s['lines'] and state()['anchor']==s['anchor'];pixels('text-wrapped-rotated')
+            command('undo');command('undo');near(state()['wrapping']['width'],160);command('undo')
+        test('native wrap width relayout survives rotation and undo',wrap_width)
+        def wrap_overflow():
+            original=state()['text'];text='Supercalifragilisticexpialidocious sample'
+            enter('text',text);command('apply');choose('wrap',2,'wrapping');choose('wrapWidth',0,'wrapping')
+            assert state()['wrapping']['mode']=='WrapWithOverflow' and state()['body']['width']>96 and state()['lines']==2
+            choose('wrap',1,'wrapping');near(state()['body']['width'],96);assert state()['lines']>2 and state()['text']==text
+            command('undo');command('undo');command('undo');command('undo');assert state()['text']==original and state()['wrapping']['mode']=='NoWrap'
+        test('native overflow mode keeps words while grapheme wrapping fits them',wrap_overflow)
+        def wrap_draft():
+            original=state()['text'];draft='Keep my wrap settings draft'
+            enter('text',draft);choose('wrap',1,'wrapping');choose('wrapWidth',1,'wrapping')
+            assert state()['text']==original and canonical(state()['editorText'])==draft and state()['hasDraft']
+            command('undo');command('undo');assert canonical(state()['editorText'])==draft
+            command('revert');assert not state()['hasDraft']
+        test('wrapping and width history preserve an independent native draft',wrap_draft)
         def text_edit():
             original=state()['text'];enter('text','First line\nSecond line\nThird line');command('apply');assert state()['text']=='First line\nSecond line\nThird line' and state()['lines']==3
             command('undo');assert state()['text']==original and canonical(state()['editorText'])==original;command('redo');assert state()['lines']==3 and canonical(state()['editorText'])==state()['text'];command('undo')
@@ -115,7 +145,7 @@ with sync_playwright() as p:
             assert state()['canUndo'];command('undo');near(state()['x1'],before['x1']);near(state()['y1'],before['y1'])
         test('dragging measured body away from anchor moves the annotation',drag)
         def dialog():
-            x,y=body();original=state()['text'];page.mouse.dblclick(x,y,delay=40);page.wait_for_function('window.chartSceneText.dialog===true');enter('dialog-text','Edited with native dialog')
+            x,y=body();original=state()['text'];page.mouse.dblclick(x,y,delay=40);page.wait_for_function('window.chartSceneText.dialog===true');assert state()['typography']['dialogInput']['fontSize']==state()['fontSize'];assert state()['typography']['dialogInput']['alignment']==state()['alignment'];enter('dialog-text','Edited with native dialog')
             click('dialog-apply');page.wait_for_function('!window.chartSceneText.dialog&&window.chartSceneText.text==="Edited with native dialog"');ready();command('undo');assert state()['text']==original
         test('double click opens native editor instead of zoom extents',dialog)
         def cancel_dialog():

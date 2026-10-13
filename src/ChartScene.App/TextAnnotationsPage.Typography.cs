@@ -50,6 +50,14 @@ public sealed partial class TextAnnotationsPage
     }
     private void ApplyInputTypography(TextBox input)
     {
+        if(input.FontSize!=_label.FontSize)input.FontSize=_label.FontSize;
+        var alignment=_label.TextAlignment switch
+        {
+            ChartScene.Charting.AnnotationTextAlignment.Center=>Microsoft.UI.Xaml.TextAlignment.Center,
+            ChartScene.Charting.AnnotationTextAlignment.Right=>Microsoft.UI.Xaml.TextAlignment.Right,
+            _=>Microsoft.UI.Xaml.TextAlignment.Left
+        };
+        if(input.TextAlignment!=alignment)input.TextAlignment=alignment;
         if(input.FontFamily?.Source!=_label.FontFamily)input.FontFamily=new FontFamily(_label.FontFamily);
         if(input.FontWeight.Weight!=_label.FontWeight)input.FontWeight=new Windows.UI.Text.FontWeight{Weight=(ushort)_label.FontWeight};
         var style=_label.FontSlant switch
@@ -70,8 +78,12 @@ public sealed partial class TextAnnotationsPage
         return new(choice.SelectedIndex,choice.IsDropDownOpen,focusedIndex);
     }
     private TextTypographySnapshot Typography()=>new(_label.FontFamily,_label.FontWeight,_label.FontSlant.ToString(),
-        Choice(_familyChoice),Choice(_weightChoice),Choice(_slantChoice));
+        Choice(_familyChoice),Choice(_weightChoice),Choice(_slantChoice),InputStyle(_text),
+        _dialog?.Content is TextBox input?InputStyle(input):null);
+    private static TextInputStyleSnapshot InputStyle(TextBox input)=>new(input.FontSize,input.TextAlignment.ToString(),
+        input.FontFamily.Source,input.FontWeight.Weight,input.FontStyle.ToString());
 }
 
 public sealed record TextChoiceSnapshot(int selectedIndex,bool open,int focusedIndex);
-public sealed record TextTypographySnapshot(string family,int weight,string slant,TextChoiceSnapshot familyChoice,TextChoiceSnapshot weightChoice,TextChoiceSnapshot slantChoice);
+public sealed record TextTypographySnapshot(string family,int weight,string slant,TextChoiceSnapshot familyChoice,TextChoiceSnapshot weightChoice,TextChoiceSnapshot slantChoice,TextInputStyleSnapshot input,TextInputStyleSnapshot? dialogInput);
+public sealed record TextInputStyleSnapshot(double fontSize,string alignment,string family,int weight,string slant);

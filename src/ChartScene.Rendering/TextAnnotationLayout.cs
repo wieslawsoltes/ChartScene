@@ -66,27 +66,25 @@ public sealed class TextAnnotationLayout
         if(!anchor.IsFinite)return null;
         var style=new TextStyle(annotation.Stroke,annotation.FontSize,annotation.FontFamily,annotation.FontBold)
             {Weight=annotation.FontWeight,Slant=annotation.FontSlant};
-        string[] text=AnnotationTextContent.NormalizeLineEndings(annotation.Text).Split('\n');
-        var metrics=new TextMetrics[text.Length];
-        double width=0,ascent=0,descent=0,height=0;
-        for(int i=0;i<text.Length;i++)
+        var measured=AnnotationTextWrapper.Measure(canvas,annotation.Text,style,annotation.TextWrapping,annotation.TextWrapWidth);
+        if(measured is null)return null;
+        double width=annotation.TextWrapping==AnnotationTextWrapping.NoWrap?0:annotation.TextWrapWidth;
+        double ascent=0,descent=0,height=0;
+        foreach(var line in measured)
         {
-            var m=canvas.MeasureText(text[i].Length==0?"Mg":text[i],style);
-            if(!double.IsFinite(m.Width)||!double.IsFinite(m.Height)||!double.IsFinite(m.Ascent)||!double.IsFinite(m.Descent)
-                ||m.Width<0||m.Height<=0||m.Ascent<0||m.Descent<0)return null;
-            metrics[i]=m with{Width=text[i].Length==0?0:m.Width};
-            width=Math.Max(width,metrics[i].Width);ascent=Math.Max(ascent,m.Ascent);descent=Math.Max(descent,m.Descent);height=Math.Max(height,m.Height);
+            var m=line.Metrics;
+            width=Math.Max(width,m.Width);ascent=Math.Max(ascent,m.Ascent);descent=Math.Max(descent,m.Descent);height=Math.Max(height,m.Height);
         }
         double padding=annotation.TextPadding,advance=Math.Max(height,ascent+descent)*annotation.LineSpacing;
-        double w=width+2*padding,h=ascent+descent+(text.Length-1)*advance+2*padding;
+        double w=width+2*padding,h=ascent+descent+(measured.Count-1)*advance+2*padding;
         if(!double.IsFinite(w)||!double.IsFinite(h)||w<=0||h<=0)return null;
         double left=annotation.HorizontalAnchorPoint switch{HorizontalAnchorPoint.Center=>-w/2,HorizontalAnchorPoint.Right=>-w,_=>0};
         double top=annotation.VerticalAnchorPoint switch{VerticalAnchorPoint.Center=>-h/2,VerticalAnchorPoint.Bottom=>-h,VerticalAnchorPoint.Baseline=>-padding-ascent,_=>0};
-        var lines=new AnnotationTextLine[text.Length];
-        for(int i=0;i<text.Length;i++)
+        var lines=new AnnotationTextLine[measured.Count];
+        for(int i=0;i<measured.Count;i++)
         {
-            double offset=annotation.TextAlignment switch{AnnotationTextAlignment.Center=>(width-metrics[i].Width)/2,AnnotationTextAlignment.Right=>width-metrics[i].Width,_=>0};
-            lines[i]=new(text[i],new(left+padding+offset,top+padding+ascent+i*advance));
+            double offset=annotation.TextAlignment switch{AnnotationTextAlignment.Center=>(width-measured[i].Metrics.Width)/2,AnnotationTextAlignment.Right=>width-measured[i].Metrics.Width,_=>0};
+            lines[i]=new(measured[i].Text,new(left+padding+offset,top+padding+ascent+i*advance));
         }
         var result=new TextAnnotationLayout(anchor,new(left,top,w,h),annotation.ClipToPlot?plot:surface,
             annotation.RotationAngle,style,annotation.Background,annotation.BorderColor,annotation.BorderThickness,lines);
