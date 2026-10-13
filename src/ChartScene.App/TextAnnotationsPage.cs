@@ -65,6 +65,7 @@ public sealed partial class TextAnnotationsPage:Page
         revert.Click+=(_,_)=>{_actions++;_lastAction="revert";_text.Text=_label.Text;RefreshDraft();Publish();};
         panel.Children.Add(_draftStatus);
         BuildTypographyInspector(panel);
+        BuildWrappingInspector(panel);
         _text.TextChanged+=(_,_)=>{RefreshDraft();Publish();};RefreshDraft();
         panel.Children.Add(new TextBlock{Text="Click or drag anywhere in the label, not just its anchor. Double-click opens the native text editor.\n\nAlignment, rotation, font changes and text edits share chart undo/redo. Revert discards only the unapplied inspector draft.",FontSize=12,TextWrapping=TextWrapping.Wrap});
         _inspector.Child=new ScrollViewer{Content=panel,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};Grid.SetColumn(_inspector,1);_workspace.Children.Add(_inspector);Register("inspector",_inspector);
@@ -138,6 +139,7 @@ public sealed partial class TextAnnotationsPage:Page
         _buttons["italic"].IsActive=_label.FontSlant==FontSlant.Italic;
         _buttons["align"].Glyph=_label.TextAlignment switch{AnnotationTextAlignment.Center=>ChartGlyph.TextAlignCenter,AnnotationTextAlignment.Right=>ChartGlyph.TextAlignRight,_=>ChartGlyph.TextAlignLeft};
         RefreshTypography();
+        RefreshWrapping();
         _buttons["undo"].IsEnabled=_chart.Controller.History.CanUndo;_buttons["redo"].IsEnabled=_chart.Controller.History.CanRedo;
         _status.Text=string.IsNullOrEmpty(_error)?$"{_label.HorizontalAnchorPoint} / {_label.VerticalAnchorPoint} · {_label.RotationAngle}° · {_label.FontSize} px · Drag body or double-click to edit":_error;
         RefreshDraft();
@@ -172,13 +174,13 @@ public sealed partial class TextAnnotationsPage:Page
             _label.RotationAngle,_label.FontSize,_label.FontBold,_label.TextAlignment.ToString(),_label.Background is not null,_model.Theme.Name,
             _label.IsSelected,_label.X1,_label.Y1,_chart.FrameCount,_chart.Controller.History.CanUndo,_chart.Controller.History.CanRedo,_dialog is not null,
             _actions,_lastAction,layout is null?null:Rect(layout.Bounds),layout is null?null:Point(layout.Anchor),layout?.Corners.Select(Point).ToArray()??[],layout?.Lines.Count??0,
-            _controls.ToDictionary(p=>p.Key,p=>Bounds(p.Value)),_text.Text,HasDraft,_buttons["revert"].IsEnabled,Typography());
+            _controls.ToDictionary(p=>p.Key,p=>Bounds(p.Value)),_text.Text,HasDraft,_buttons["revert"].IsEnabled,Typography(),Wrapping());
         Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.chartSceneText="+JsonSerializer.Serialize(snapshot,TextPageJsonContext.Default.TextPageSnapshot));
 #endif
     }
 }
 public sealed record TextPointDto(double x,double y);
 public sealed record TextPageSnapshot(bool ready,string? error,string text,string horizontal,string vertical,double rotation,double fontSize,bool bold,string alignment,bool background,string theme,
-    bool selected,double x1,double y1,long frames,bool canUndo,bool canRedo,bool dialog,long actions,string lastAction,ControlBounds? body,TextPointDto? anchor,TextPointDto[] corners,int lines,Dictionary<string,ControlBounds?> controls,string editorText,bool hasDraft,bool revertEnabled,TextTypographySnapshot typography);
+    bool selected,double x1,double y1,long frames,bool canUndo,bool canRedo,bool dialog,long actions,string lastAction,ControlBounds? body,TextPointDto? anchor,TextPointDto[] corners,int lines,Dictionary<string,ControlBounds?> controls,string editorText,bool hasDraft,bool revertEnabled,TextTypographySnapshot typography,TextWrappingSnapshot wrapping);
 [JsonSerializable(typeof(TextPageSnapshot))]
 public partial class TextPageJsonContext:JsonSerializerContext;
