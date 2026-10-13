@@ -49,7 +49,7 @@ public sealed class ChartController:IDisposable
     public ChartController(ChartModel model)
     {
         Model=model;
-        Modifiers.AddRange([new LegendModifier(),new TextAnnotationEditModifier(),new MouseWheelZoomModifier(),new ZoomExtentsModifier(),new AnnotationDragModifier(),new AxisDragModifier(),new RubberBandXyZoomModifier(),new SeriesSelectionModifier(),new ZoomPanModifier()]);
+        Modifiers.AddRange([new LegendModifier(),new TextAnnotationResizeModifier(),new TextAnnotationEditModifier(),new MouseWheelZoomModifier(),new ZoomExtentsModifier(),new AnnotationDragModifier(),new AxisDragModifier(),new RubberBandXyZoomModifier(),new SeriesSelectionModifier(),new ZoomPanModifier()]);
     }
     public void SetFrame(ChartFrame frame) { Frame=frame; HitTester.SetFrame(frame); }
     public bool Process(ChartInput input)
@@ -83,6 +83,10 @@ public sealed class ChartController:IDisposable
             }
             if(input.Kind==ChartInputKind.Up) _touches.Remove(input.PointerId);
         }
+        // A captured pointer owns the gesture. Other mouse/pen IDs cannot steal it,
+        // dispatch another modifier, or trigger an unrelated rollover query.
+        // Two-touch pinch handoff is intentionally processed above this guard.
+        if(_captured is not null&&input.PointerId!=_capturePointer)return true;
         // A captured editor supplies its original-point overlay. A redundant rollover
         // would overwrite it and recreate changed source snapshots before rendering.
         if(input.Kind==ChartInputKind.Move && _captured is not IChartCursorOwner { OwnsCursor: true })
