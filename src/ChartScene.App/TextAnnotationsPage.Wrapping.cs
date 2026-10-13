@@ -10,13 +10,14 @@ public sealed partial class TextAnnotationsPage
     private static readonly double[] WrapWidths=[80,120,160,240,320];
     private readonly ComboBox _wrapChoice=new(){Header="Text wrapping",HorizontalAlignment=HorizontalAlignment.Stretch};
     private readonly ComboBox _wrapWidthChoice=new(){Header="Content width (logical px)",HorizontalAlignment=HorizontalAlignment.Stretch};
+    private double[] _displayWrapWidths=WrapWidths;
     private bool _syncingWrapping;
     private void BuildWrappingInspector(StackPanel panel)
     {
         _wrapChoice.ItemsSource=new[]{"No wrapping","Wrap long words","Keep whole words"};
         _wrapWidthChoice.ItemsSource=WrapWidths;
         Add("wrap",_wrapChoice,()=>Edit("Text wrapping",()=>_label.TextWrapping,v=>_label.TextWrapping=v,(AnnotationTextWrapping)_wrapChoice.SelectedIndex));
-        Add("wrapWidth",_wrapWidthChoice,()=>Edit("Wrap width",()=>_label.TextWrapWidth,v=>_label.TextWrapWidth=v,WrapWidths[_wrapWidthChoice.SelectedIndex]));
+        Add("wrapWidth",_wrapWidthChoice,()=>Edit("Wrap width",()=>_label.TextWrapWidth,v=>_label.TextWrapWidth=v,_displayWrapWidths[_wrapWidthChoice.SelectedIndex]));
         void Add(string id,ComboBox choice,Action action)
         {
             Register(id,choice);AutomationProperties.SetName(choice,choice.Header.ToString());panel.Children.Add(choice);
@@ -34,12 +35,22 @@ public sealed partial class TextAnnotationsPage
         try
         {
             if(!_wrapChoice.IsDropDownOpen)_wrapChoice.SelectedIndex=(int)_label.TextWrapping;
-            if(!_wrapWidthChoice.IsDropDownOpen)_wrapWidthChoice.SelectedIndex=Array.IndexOf(WrapWidths,_label.TextWrapWidth);
+            if(!_wrapWidthChoice.IsDropDownOpen)
+            {
+                int index=Array.IndexOf(_displayWrapWidths,_label.TextWrapWidth);
+                if(index<0)
+                {
+                    _displayWrapWidths=[..WrapWidths,_label.TextWrapWidth];
+                    _wrapWidthChoice.ItemsSource=_displayWrapWidths;index=WrapWidths.Length;
+                }
+                _wrapWidthChoice.SelectedIndex=index;
+            }
             _wrapWidthChoice.IsEnabled=_label.TextWrapping!=AnnotationTextWrapping.NoWrap;
         }
         finally{_syncingWrapping=false;}
     }
     private TextWrappingSnapshot Wrapping()=>new(_label.TextWrapping.ToString(),_label.TextWrapWidth,
-        Choice(_wrapChoice),Choice(_wrapWidthChoice),_wrapWidthChoice.IsEnabled);
+        Choice(_wrapChoice),Choice(_wrapWidthChoice),_wrapWidthChoice.IsEnabled,
+        _wrapWidthChoice.SelectedItem is double width?width:null);
 }
-public sealed record TextWrappingSnapshot(string mode,double width,TextChoiceSnapshot wrapChoice,TextChoiceSnapshot wrapWidthChoice,bool widthEnabled);
+public sealed record TextWrappingSnapshot(string mode,double width,TextChoiceSnapshot wrapChoice,TextChoiceSnapshot wrapWidthChoice,bool widthEnabled,double? selectedWidth);

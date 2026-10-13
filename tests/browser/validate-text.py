@@ -5,6 +5,7 @@ from pathlib import Path
 from PIL import Image
 from playwright.sync_api import sync_playwright
 from uno_input import UnoInput
+from text_resize_cases import run_resize_cases
 parser=argparse.ArgumentParser();parser.add_argument('--url',default='http://127.0.0.1:8765/ChartScene/');parser.add_argument('--output',default='artifacts/browser-tests-text');args=parser.parse_args()
 out=Path(args.output);out.mkdir(parents=True,exist_ok=True);results=[];logs=[]
 with sync_playwright() as p:
@@ -131,6 +132,7 @@ with sync_playwright() as p:
             command('undo');command('undo');assert canonical(state()['editorText'])==draft
             command('revert');assert not state()['hasDraft']
         test('wrapping and width history preserve an independent native draft',wrap_draft)
+        run_resize_cases(page,out,state,ready,command,choose,enter,test,pixels,near)
         def text_edit():
             original=state()['text'];enter('text','First line\nSecond line\nThird line');command('apply');assert state()['text']=='First line\nSecond line\nThird line' and state()['lines']==3
             command('undo');assert state()['text']==original and canonical(state()['editorText'])==original;command('redo');assert state()['lines']==3 and canonical(state()['editorText'])==state()['text'];command('undo')
