@@ -19,6 +19,16 @@ with sync_playwright() as p:
     def command(name):
         before=state()['actions'];click(name)
         page.wait_for_function('p=>window.chartSceneText.actions>p.before&&window.chartSceneText.lastAction===p.name',arg={'before':before,'name':name});ready()
+    def choose(name,index):
+        field=name+'Choice'
+        if not state()['typography'][field]['open']:click(name)
+        page.wait_for_function('f=>window.chartSceneText.typography[f].open&&window.chartSceneText.typography[f].focusedIndex>=0',arg=field)
+        page.keyboard.press('Home');page.wait_for_function('f=>window.chartSceneText.typography[f].focusedIndex===0',arg=field)
+        for position in range(index):
+            page.keyboard.press('ArrowDown')
+            page.wait_for_function('p=>window.chartSceneText.typography[p.f].focusedIndex===p.i',arg={'f':field,'i':position+1})
+        page.keyboard.press('Enter')
+        page.wait_for_function('p=>!window.chartSceneText.typography[p.f].open&&window.chartSceneText.typography[p.f].selectedIndex===p.i',arg={'f':field,'i':index});ready()
     def canonical(text):return text.replace('\r\n','\n').replace('\r','\n')
     def near(a,b):assert abs(a-b)<1e-7,(a,b)
     def pixels(name):
@@ -67,6 +77,30 @@ with sync_playwright() as p:
             command('undo');near(state()['fontSize'],20);command('undo');assert not state()['bold']
             for align in ['Center','Right','Left']:command('align');assert state()['alignment']==align
         test('font size weight and multiline alignment are live and undoable',typography)
+        def family_choice():
+            choose('family',1);assert state()['typography']['family']=='Georgia';pixels('text-georgia')
+            command('undo');assert state()['typography']['family']=='Arial' and state()['typography']['familyChoice']['selectedIndex']==0
+            command('redo');assert state()['typography']['family']=='Georgia';command('undo')
+        test('native font family selection renders and synchronizes undo redo',family_choice)
+        def weights():
+            choose('weight',3);assert state()['typography']['weight']==600 and not state()['bold']
+            command('bold');assert state()['typography']['weight']==700
+            command('undo');assert state()['typography']['weight']==600 and state()['typography']['weightChoice']['selectedIndex']==3
+            command('undo');assert state()['typography']['weight']==400
+        test('bold toolbar undo restores the exact custom weight',weights)
+        def slants():
+            choose('slant',2);assert state()['typography']['slant']=='Oblique'
+            command('italic');assert state()['typography']['slant']=='Italic';pixels('text-italic')
+            command('undo');assert state()['typography']['slant']=='Oblique'
+            command('undo');assert state()['typography']['slant']=='Normal'
+        test('native slant choices and italic command share precise history',slants)
+        def typography_draft():
+            original=state()['text'];draft='Keep this typography draft'
+            enter('text',draft);choose('weight',4);choose('slant',1)
+            assert canonical(state()['editorText'])==draft and state()['text']==original and state()['hasDraft']
+            command('undo');command('undo');assert canonical(state()['editorText'])==draft
+            command('revert');assert not state()['hasDraft']
+        test('font controls preserve separate unapplied annotation text',typography_draft)
         def text_edit():
             original=state()['text'];enter('text','First line\nSecond line\nThird line');command('apply');assert state()['text']=='First line\nSecond line\nThird line' and state()['lines']==3
             command('undo');assert state()['text']==original and canonical(state()['editorText'])==original;command('redo');assert state()['lines']==3 and canonical(state()['editorText'])==state()['text'];command('undo')

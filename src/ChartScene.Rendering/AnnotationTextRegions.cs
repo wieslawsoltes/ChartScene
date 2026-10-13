@@ -6,7 +6,7 @@ namespace ChartScene.Rendering;
 /// <summary>Frame-owned snapshot plus an identity index; neither source lists nor other frames are retained.</summary>
 internal sealed class AnnotationTextRegions : ReadOnlyCollection<AnnotationTextRegion>
 {
-    public static readonly AnnotationTextRegions Empty = new([]);
+    public new static readonly AnnotationTextRegions Empty = new([]);
     private readonly Dictionary<ChartAnnotation, TextAnnotationLayout> _byAnnotation;
     private AnnotationTextRegions(AnnotationTextRegion[] items) : base(items)
     {

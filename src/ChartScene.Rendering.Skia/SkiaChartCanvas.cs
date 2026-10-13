@@ -14,11 +14,11 @@ public sealed class SkiaResources:IDisposable
 {
     internal sealed record FontEntry(SKTypeface Typeface,SKFont Font,SKShaper Shaper,bool OwnsTypeface):IDisposable
     { public void Dispose() { Shaper.Dispose(); Font.Dispose(); if(OwnsTypeface) Typeface.Dispose(); } }
-    internal sealed record TextEntry(SKTextBlob Blob,TextMetrics Metrics):IDisposable { public void Dispose()=>Blob.Dispose(); }
+    internal sealed record TextEntry(SKTextBlob? Blob,TextMetrics Metrics):IDisposable { public void Dispose()=>Blob?.Dispose(); }
     private readonly Dictionary<ColorRgba,SKPaint> _fills=[];
     private readonly Dictionary<(ColorRgba,double,string,SKStrokeCap),SKPaint> _strokes=[];
-    private readonly Dictionary<(string,double,bool),FontEntry> _fonts=[];
-    private readonly Dictionary<(string,string,double,bool),TextEntry> _text=[];
+    private readonly Dictionary<(string,double,int,FontSlant),FontEntry> _fonts=[];
+    private readonly Dictionary<(string,string,double,int,FontSlant),TextEntry> _text=[];
     private readonly Dictionary<RasterImage,SKImage> _images=[];
     private bool _disposed;
     public SkiaCacheStatistics CacheStatistics=>new(_fonts.Count,_text.Count,_images.Count,_fills.Count,_strokes.Count);
@@ -61,11 +61,13 @@ public sealed class SkiaResources:IDisposable
     internal FontEntry Font(TextStyle style)
     {
         Check();
-        if(!float.IsFinite((float)style.Size)||style.Size<=0) throw new ArgumentOutOfRangeException(nameof(style),"Font size must be finite and positive.");
-        var key=(style.Family,style.Size,style.Bold);
+        ValidateTextStyle(style);
+        var key=(style.Family,style.Size,style.EffectiveWeight,style.Slant);
         if(!_fonts.TryGetValue(key,out var result))
         {
-            var typeface=SKTypeface.FromFamilyName(style.Family,style.Bold?SKFontStyle.Bold:SKFontStyle.Normal);
+            using var nativeStyle=new SKFontStyle(style.EffectiveWeight,(int)SKFontStyleWidth.Normal,style.Slant switch
+            {FontSlant.Italic=>SKFontStyleSlant.Italic,FontSlant.Oblique=>SKFontStyleSlant.Oblique,_=>SKFontStyleSlant.Upright});
+            var typeface=SKTypeface.FromFamilyName(style.Family,nativeStyle);
             bool owns=typeface is not null; typeface??=SKTypeface.Default;
             var font=new SKFont(typeface,(float)style.Size){Edging=SKFontEdging.SubpixelAntialias,Subpixel=true};
             _fonts[key]=result=new(typeface,font,new SKShaper(typeface),owns);
@@ -75,24 +77,42 @@ public sealed class SkiaResources:IDisposable
     internal TextEntry Text(string text,TextStyle style)
     {
         Check();
-        var key=(text,style.Family,style.Size,style.Bold);
+        ArgumentNullException.ThrowIfNull(text);
+        ValidateTextStyle(style);
+        // CR, LF and CRLF are the same hard break, also for non-annotation canvas consumers.
+        // Normalize before keying so equivalent inputs share one shaped blob.
+        text=AnnotationTextContent.NormalizeLineEndings(text);
+        var key=(text,style.Family,style.Size,style.EffectiveWeight,style.Slant);
         if(_text.TryGetValue(key,out var cached)) return cached;
         var entry=Font(style); var metrics=entry.Font.Metrics;
         double ascent=-metrics.Ascent,descent=metrics.Descent,lineHeight=Math.Max(style.Size,metrics.Descent-metrics.Ascent+metrics.Leading),width=0;
-        string[] lines=text.Replace("\r\n","\n").Split('\n');
+        string[] lines=text.Split('\n');
         using var builder=new SKTextBlobBuilder();
         for(int line=0;line<lines.Length;line++)
         {
             if(lines[line].Length==0) continue;
             var shaped=entry.Shaper.Shape(lines[line],entry.Font);
             width=Math.Max(width,shaped.Width);
-            var glyphs=shaped.Codepoints.Select(v=>(ushort)v).ToArray();
-            var positions=shaped.Points.Select(p=>new SKPoint(p.X,p.Y+(float)(line*lineHeight))).ToArray();
+            // No capturing LINQ lambdas here: their display class would be allocated
+            // at method entry even on a warm cache hit before this miss-only branch.
+            var glyphs=new ushort[shaped.Codepoints.Length];var positions=new SKPoint[glyphs.Length];
+            for(int i=0;i<glyphs.Length;i++)
+            {
+                glyphs[i]=(ushort)shaped.Codepoints[i];
+                positions[i]=new(shaped.Points[i].X,shaped.Points[i].Y+(float)(line*lineHeight));
+            }
             var run=builder.AllocatePositionedRun(entry.Font,glyphs.Length); run.SetGlyphs(glyphs); run.SetPositions(positions);
         }
         var blob=builder.Build();
-        if(blob is null) { using var emptyBuilder=new SKTextBlobBuilder(); var run=emptyBuilder.AllocatePositionedRun(entry.Font,1); run.SetGlyphs([0]); run.SetPositions([new SKPoint(-100000,-100000)]); blob=emptyBuilder.Build(); }
-        return _text[key]=new(blob!,new(width,lineHeight*lines.Length,ascent,descent));
+        // An empty paragraph has font metrics but no ink. Never emit a sentinel glyph:
+        // a host transform could bring that supposedly offscreen glyph back into view.
+        return _text[key]=new(blob,new(width,lineHeight*lines.Length,ascent,descent));
+    }
+    private static void ValidateTextStyle(TextStyle style)
+    {
+        if(!float.IsFinite((float)style.Size)||style.Size<=0) throw new ArgumentOutOfRangeException(nameof(style),"Font size must be finite and positive.");
+        if(string.IsNullOrWhiteSpace(style.Family)) throw new ArgumentException("A font family is required.",nameof(style));
+        if(style.Weight is <0 or >1000 || !Enum.IsDefined(style.Slant)) throw new ArgumentOutOfRangeException(nameof(style),"Invalid font weight or slant.");
     }
     internal SKImage Image(RasterImage image)
     {
@@ -201,7 +221,9 @@ public sealed class SkiaChartCanvas(SKCanvas canvas,SkiaResources resources):ICh
     public void DrawText(string text,PointD baseline,TextStyle style,TextAlignment alignment=TextAlignment.Left,double rotationDegrees=0)
     {
         if(string.IsNullOrEmpty(text)||!baseline.IsFinite) return;
-        var shaped=resources.Text(text,style); double offset=alignment==TextAlignment.Center?-shaped.Metrics.Width/2:alignment==TextAlignment.Right?-shaped.Metrics.Width:0;
+        var shaped=resources.Text(text,style);
+        if(shaped.Blob is null) return;
+        double offset=alignment==TextAlignment.Center?-shaped.Metrics.Width/2:alignment==TextAlignment.Right?-shaped.Metrics.Width:0;
         canvas.Save();
         try
         {
@@ -210,7 +232,7 @@ public sealed class SkiaChartCanvas(SKCanvas canvas,SkiaResources resources):ICh
         }
         finally { canvas.Restore(); }
     }
-    public TextMetrics MeasureText(string text,TextStyle style)=>string.IsNullOrEmpty(text)?new(0,style.Size,style.Size*.8,style.Size*.2):resources.Text(text,style).Metrics;
+    public TextMetrics MeasureText(string text,TextStyle style)=>resources.Text(text,style).Metrics;
 }
 
 public static class RasterExporter

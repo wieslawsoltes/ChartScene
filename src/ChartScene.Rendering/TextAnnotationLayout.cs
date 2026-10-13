@@ -64,7 +64,8 @@ public sealed class TextAnnotationLayout
         if(string.IsNullOrEmpty(annotation.Text)||plot.IsEmpty)return null;
         var anchor=AnnotationGeometry.ToScreen(model,annotation,plot,annotation.X1,annotation.Y1);
         if(!anchor.IsFinite)return null;
-        var style=new TextStyle(annotation.Stroke,annotation.FontSize,annotation.FontFamily,annotation.FontBold);
+        var style=new TextStyle(annotation.Stroke,annotation.FontSize,annotation.FontFamily,annotation.FontBold)
+            {Weight=annotation.FontWeight,Slant=annotation.FontSlant};
         string[] text=AnnotationTextContent.NormalizeLineEndings(annotation.Text).Split('\n');
         var metrics=new TextMetrics[text.Length];
         double width=0,ascent=0,descent=0,height=0;
