@@ -87,6 +87,24 @@ with sync_playwright() as p:
         def cancel_dialog():
             x,y=body();original=state()['text'];page.mouse.dblclick(x,y,delay=40);page.wait_for_function('window.chartSceneText.dialog===true');enter('dialog-text','Must not apply');page.keyboard.press('Escape');page.wait_for_function('window.chartSceneText.dialog===false');assert state()['text']==original
         test('native annotation dialog cancellation preserves text',cancel_dialog)
+        def preserve_draft():
+            original=state()['text'];draft='Unapplied inspector draft\nKeep both lines'
+            enter('text',draft);page.wait_for_function('window.chartSceneText.hasDraft&&window.chartSceneText.revertEnabled')
+            command('bold');command('undo');assert canonical(state()['editorText'])==draft and state()['text']==original
+            x,y=body();page.mouse.dblclick(x,y,delay=40);page.wait_for_function('window.chartSceneText.dialog===true')
+            enter('dialog-text','Discard this dialog edit');page.keyboard.press('Escape')
+            page.wait_for_function('window.chartSceneText.dialog===false');ready()
+            assert canonical(state()['editorText'])==draft and state()['text']==original
+            assert state()['hasDraft'] and state()['revertEnabled']
+            pixels('text-unapplied-draft')
+            command('revert');assert canonical(state()['editorText'])==original and not state()['hasDraft'] and not state()['revertEnabled']
+        test('cancelled dialog and style changes preserve unapplied inspector text',preserve_draft)
+        def revert_history():
+            original=state()['text'];command('bold');command('undo');assert state()['canRedo']
+            enter('text','Discard only the draft');page.wait_for_function('window.chartSceneText.revertEnabled')
+            command('revert');assert state()['text']==original and canonical(state()['editorText'])==original and state()['canRedo']
+            command('redo');assert state()['bold'];command('undo');assert not state()['bold']
+        test('native draft revert preserves the existing redo branch',revert_history)
         def background():
             before=state()['body'];command('background');assert state()['background'];pixels('text-panel');command('undo');assert not state()['background'];assert state()['body']==before
         test('optional text panel does not change label layout',background)

@@ -45,7 +45,7 @@ public sealed partial class ChartRenderer
         if(model.ShowLegend) DrawLegend(canvas,model,layout);
         if(view is not null) DrawInteraction(canvas,model,layout,view);
         long source=model.RenderableSeries.Where(s=>s.IsVisible).Sum(s=>(long)(s.DataSeries?.Count??(s.HeatmapGrid is { } g?g.Width*g.Height:0)));
-        return new(layout,new(source,_renderedPoints,canvas.Commands,timer.Elapsed.TotalMilliseconds,model.Revision),_hits.ToArray(),_legend.ToArray(),[]){TextAnnotations=Array.AsReadOnly(_annotationTexts.ToArray())};
+        return new(layout,new(source,_renderedPoints,canvas.Commands,timer.Elapsed.TotalMilliseconds,model.Revision),_hits.ToArray(),_legend.ToArray(),[]){TextAnnotations=_annotationTexts};
     }
     private static void DrawBackground(IChartCanvas c,ChartModel m,ChartLayout l)
     {

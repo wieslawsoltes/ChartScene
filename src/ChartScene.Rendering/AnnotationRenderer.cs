@@ -38,9 +38,7 @@ public static class AnnotationGeometry
         if(a.Kind==AnnotationKind.Text && frame is not null)
         {
             if(frame.Statistics.ModelRevision!=model.Revision)return double.PositiveInfinity;
-            foreach(var region in frame.TextAnnotations)
-                if(ReferenceEquals(region.Annotation,a)) return region.Layout.HitDistance(point);
-            return double.PositiveInfinity;
+            return frame.FindTextAnnotation(a)?.HitDistance(point) ?? double.PositiveInfinity;
         }
         var(p1,p2)=Endpoints(model,a,plot);
         if(!p1.IsFinite||!p2.IsFinite) return double.PositiveInfinity;

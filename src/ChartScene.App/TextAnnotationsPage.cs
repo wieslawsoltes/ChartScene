@@ -22,6 +22,7 @@ public sealed class TextAnnotationsPage:Page
     private readonly ChartModel _model=new(){Title="Text annotations",Subtitle="Drag the label body · Double-click to edit",ShowLegend=false};
     private readonly TextAnnotation _label=new(){Id="note",Text="Measured annotation\nSecond line",X1=.5,Y1=.4,XCoordinateMode=CoordinateMode.Relative,YCoordinateMode=CoordinateMode.Relative,FontSize=20,TextPadding=8,BorderThickness=1};
     private readonly TextBox _text=new(){AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,Height=105,MaxLength=4096,FontSize=13};
+    private readonly TextBlock _draftStatus=new(){FontSize=11,TextWrapping=TextWrapping.Wrap};
     private readonly TextBlock _status=new(){FontSize=11,Margin=new Thickness(12,5,12,5),TextWrapping=TextWrapping.Wrap};
     private readonly Border _inspector=new(){Padding=new Thickness(14),BorderThickness=new Thickness(1,0,0,0)};
     private readonly Dictionary<string,FrameworkElement> _controls=[];
@@ -58,8 +59,12 @@ public sealed class TextAnnotationsPage:Page
         _text.Text=_label.Text;Register("text",_text);
         var panel=new StackPanel{Spacing=12};panel.Children.Add(new TextBlock{Text="ANNOTATION TEXT",FontSize=11,Opacity=.7});panel.Children.Add(_text);
         var apply=new ChartToolButton(ChartGlyph.Source,"Apply text");apply.Describe("Apply annotation text");Register("apply",apply);_buttons.Add("apply",apply);panel.Children.Add(apply);
-        apply.Click+=(_,_)=>{_actions++;_lastAction="apply";ApplyText(_text.Text);};
-        panel.Children.Add(new TextBlock{Text="Click or drag anywhere in the label, not just its anchor. Double-click opens the native text editor.\n\nAlignment, rotation, font changes and text edits share chart undo/redo.",FontSize=12,TextWrapping=TextWrapping.Wrap});
+        apply.Click+=(_,_)=>{_actions++;_lastAction="apply";ApplyText(_text.Text);RefreshDraft();Publish();};
+        var revert=new ChartToolButton(ChartGlyph.Undo,"Revert draft");revert.Describe("Discard unapplied text changes");Register("revert",revert);_buttons.Add("revert",revert);panel.Children.Add(revert);
+        revert.Click+=(_,_)=>{_actions++;_lastAction="revert";_text.Text=_label.Text;RefreshDraft();Publish();};
+        panel.Children.Add(_draftStatus);
+        _text.TextChanged+=(_,_)=>{RefreshDraft();Publish();};RefreshDraft();
+        panel.Children.Add(new TextBlock{Text="Click or drag anywhere in the label, not just its anchor. Double-click opens the native text editor.\n\nAlignment, rotation, font changes and text edits share chart undo/redo. Revert discards only the unapplied inspector draft.",FontSize=12,TextWrapping=TextWrapping.Wrap});
         _inspector.Child=new ScrollViewer{Content=panel,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};Grid.SetColumn(_inspector,1);_workspace.Children.Add(_inspector);Register("inspector",_inspector);
         Grid.SetRow(_workspace,1);_root.Children.Add(_workspace);Grid.SetRow(_status,2);_root.Children.Add(_status);Content=_root;
         var data=new XyDataSeries();data.AppendRange(Enumerable.Range(0,101).Select(i=>i*.1).ToArray(),Enumerable.Range(0,101).Select(i=>5+2*Math.Sin(i*.08)).ToArray());
@@ -91,6 +96,14 @@ public sealed class TextAnnotationsPage:Page
         // movement must never replace a draft the user is still typing.
         _text.Text = value;
     }
+    private bool HasDraft => !AnnotationTextContent.Equivalent(_label.Text, _text.Text);
+    private void RefreshDraft()
+    {
+        bool dirty=HasDraft;
+        _buttons["revert"].IsEnabled=dirty;
+        _buttons["apply"].IsActive=dirty;
+        _draftStatus.Text=dirty?"Unapplied changes":"Text is up to date";
+    }
     private async void OpenEditor(ChartAnnotation annotation)
     {
         if(_dialog is not null||!IsLoaded||!ReferenceEquals(annotation,_label))return;
@@ -98,11 +111,12 @@ public sealed class TextAnnotationsPage:Page
         var dialog=new ContentDialog{Title="Edit annotation text",Content=input,PrimaryButtonText="Apply",CloseButtonText="Cancel",XamlRoot=XamlRoot};_dialog=dialog;
         try
         {
+            // Apply synchronizes through SetText. Cancel, Escape, unload and a
+            // no-op Apply must leave a separate, unapplied inspector draft intact.
             if(await dialog.ShowAsync()==ContentDialogResult.Primary)ApplyText(input.Text);
-            _text.Text=_label.Text;
         }
         catch(Exception error){_error=error.Message;}
-        finally{_dialog=null;foreach(string key in _controls.Keys.Where(k=>k.StartsWith("dialog-",StringComparison.Ordinal)).ToArray())_controls.Remove(key);Publish();}
+        finally{_dialog=null;foreach(string key in _controls.Keys.Where(k=>k.StartsWith("dialog-",StringComparison.Ordinal)).ToArray())_controls.Remove(key);RefreshDraft();Publish();}
     }
     private void Register(string id,FrameworkElement control){_controls[id]=control;AutomationProperties.SetAutomationId(control,"text-"+id);UiInputTrace.Register(control,"text-"+id);}
     private static SolidColorBrush Brush(ColorRgba c)=>new(Windows.UI.Color.FromArgb(c.A,c.R,c.G,c.B));
@@ -110,7 +124,7 @@ public sealed class TextAnnotationsPage:Page
     {
         var theme=_light?ChartTheme.Light:ChartTheme.Dark;RequestedTheme=_light?ElementTheme.Light:ElementTheme.Dark;
         _model.Theme=theme;_label.Stroke=theme.Accent;_label.BorderColor=theme.Accent;if(_label.Background is not null)_label.Background=theme.Background;
-        _root.Background=_inspector.Background=Brush(theme.Background);_inspector.BorderBrush=Brush(theme.Border);_status.Foreground=Brush(theme.Muted);
+        _root.Background=_inspector.Background=Brush(theme.Background);_inspector.BorderBrush=Brush(theme.Border);_status.Foreground=_draftStatus.Foreground=Brush(theme.Muted);
         foreach(var button in _buttons.Values)button.ApplyTheme(theme);
     }
     private void Resize(){bool visible=ActualWidth>=1100;_inspector.Visibility=visible?Visibility.Visible:Visibility.Collapsed;_workspace.ColumnDefinitions[1].Width=new GridLength(visible?260:0);}
@@ -120,6 +134,7 @@ public sealed class TextAnnotationsPage:Page
         _buttons["font"].Label=_label.FontSize+" px";_buttons["bold"].IsActive=_label.FontBold;_buttons["background"].IsActive=_label.Background is not null;_buttons["flip"].IsActive=_model.YAxis.FlippedCoordinates;
         _buttons["undo"].IsEnabled=_chart.Controller.History.CanUndo;_buttons["redo"].IsEnabled=_chart.Controller.History.CanRedo;
         _status.Text=string.IsNullOrEmpty(_error)?$"{_label.HorizontalAnchorPoint} / {_label.VerticalAnchorPoint} · {_label.RotationAngle}° · {_label.FontSize} px · Drag body or double-click to edit":_error;
+        RefreshDraft();
     }
     private static FrameworkElement? Find(DependencyObject root,string name)
     {
@@ -145,19 +160,19 @@ public sealed class TextAnnotationsPage:Page
         var origin=_chart.TransformToVisual(null).TransformPoint(new Point(0,0));
         TextPointDto Point(PointD p)=>new(p.X+origin.X,p.Y+origin.Y);
         ControlBounds Rect(RectD r)=>new(r.X+origin.X,r.Y+origin.Y,r.Width,r.Height);
-        var layout=frame.TextAnnotations.FirstOrDefault(r=>ReferenceEquals(r.Annotation,_label))?.Layout;
+        var layout=frame.FindTextAnnotation(_label);
         var snapshot=new TextPageSnapshot(_chart.LastError is null&&frame.Statistics.ModelRevision==_model.Revision,
             _chart.LastError??(string.IsNullOrEmpty(_error)?null:_error),_label.Text,_label.HorizontalAnchorPoint.ToString(),_label.VerticalAnchorPoint.ToString(),
             _label.RotationAngle,_label.FontSize,_label.FontBold,_label.TextAlignment.ToString(),_label.Background is not null,_model.Theme.Name,
             _label.IsSelected,_label.X1,_label.Y1,_chart.FrameCount,_chart.Controller.History.CanUndo,_chart.Controller.History.CanRedo,_dialog is not null,
             _actions,_lastAction,layout is null?null:Rect(layout.Bounds),layout is null?null:Point(layout.Anchor),layout?.Corners.Select(Point).ToArray()??[],layout?.Lines.Count??0,
-            _controls.ToDictionary(p=>p.Key,p=>Bounds(p.Value)),_text.Text);
+            _controls.ToDictionary(p=>p.Key,p=>Bounds(p.Value)),_text.Text,HasDraft,_buttons["revert"].IsEnabled);
         Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.chartSceneText="+JsonSerializer.Serialize(snapshot,TextPageJsonContext.Default.TextPageSnapshot));
 #endif
     }
 }
 public sealed record TextPointDto(double x,double y);
 public sealed record TextPageSnapshot(bool ready,string? error,string text,string horizontal,string vertical,double rotation,double fontSize,bool bold,string alignment,bool background,string theme,
-    bool selected,double x1,double y1,long frames,bool canUndo,bool canRedo,bool dialog,long actions,string lastAction,ControlBounds? body,TextPointDto? anchor,TextPointDto[] corners,int lines,Dictionary<string,ControlBounds?> controls,string editorText);
+    bool selected,double x1,double y1,long frames,bool canUndo,bool canRedo,bool dialog,long actions,string lastAction,ControlBounds? body,TextPointDto? anchor,TextPointDto[] corners,int lines,Dictionary<string,ControlBounds?> controls,string editorText,bool hasDraft,bool revertEnabled);
 [JsonSerializable(typeof(TextPageSnapshot))]
 public partial class TextPageJsonContext:JsonSerializerContext;

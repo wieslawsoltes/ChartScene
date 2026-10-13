@@ -10,8 +10,15 @@ public sealed record SeriesHit(RenderableSeries Series,int DataIndex,double X,do
 public sealed record RenderStatistics(long SourcePoints,long RenderedPoints,int DrawingCommands,double CpuMilliseconds,long ModelRevision);
 public sealed record ChartFrame(ChartLayout Layout,RenderStatistics Statistics,IReadOnlyList<HitRegion> HitRegions,IReadOnlyList<LegendItem> LegendItems,IReadOnlyList<string> Diagnostics)
 {
-    /// <summary>Measured text geometry belonging to this rendered frame, including its actual font metrics.</summary>
-    public IReadOnlyList<AnnotationTextRegion> TextAnnotations { get; init; } = [];
+    private AnnotationTextRegions _textAnnotations = AnnotationTextRegions.Empty;
+    /// <summary>Frame-owned snapshot of measured text geometry, including its actual font metrics.</summary>
+    public IReadOnlyList<AnnotationTextRegion> TextAnnotations
+    {
+        get => _textAnnotations;
+        init => _textAnnotations = AnnotationTextRegions.Capture(value);
+    }
+    /// <summary>Finds the last painted region by annotation identity, without scanning all text regions.</summary>
+    public TextAnnotationLayout? FindTextAnnotation(ChartAnnotation annotation) => _textAnnotations.Find(annotation);
 }
 public sealed class ChartViewState
 {

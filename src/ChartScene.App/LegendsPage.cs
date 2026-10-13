@@ -218,6 +218,16 @@ public sealed class LegendsPage : Page
             if (Checkbox(VisualTreeHelper.GetChild(element, i)) is { } child) return child;
         return null;
     }
+    private LegendEntrySnapshot DescribeEntry(ChartLegendEntry entry)
+    {
+        var container = _legend.ContainerFromEntry(entry);
+        var checkbox = Checkbox(container);
+        // The host's routed events cannot distinguish a stale row rectangle from
+        // another checkbox after filtering. Observe the actual native input target,
+        // including checkboxes supplied by custom templates; never change its state.
+        if (checkbox is not null) UiInputTrace.Register(checkbox, "legends-checkbox-" + entry.Identity);
+        return new(entry.Identity, entry.Series.Id, entry.SeriesName, entry.IsVisible, Bounds(container), Bounds(checkbox));
+    }
     private LegendTypographySnapshot? Typography()
     {
         var row = _legend.Entries.FirstOrDefault();
@@ -238,7 +248,7 @@ public sealed class LegendsPage : Page
             _legend.ShowVisibilityCheckboxes, _legend.ShowSeriesMarkers, _customRow, _customMarker, _legend.RowCreationCount, _legend.EntryCreationCount, _legend.MembershipPassCount,
             _chart.Controller.History.CanUndo, _chart.Controller.History.CanRedo, _chart.FrameCount, _actions, _lastAction, _legend.RetainedRowCount,
             _legend.RowSynchronizationCount, _legend.MarkerInvalidationCount, Typography(),
-            _legend.Entries.Select(e => new LegendEntrySnapshot(e.Identity, e.Series.Id, e.SeriesName, e.IsVisible, Bounds(_legend.ContainerFromEntry(e)), Bounds(Checkbox(_legend.ContainerFromEntry(e))))).ToArray(),
+            _legend.Entries.Select(DescribeEntry).ToArray(),
             _model.RenderableSeries.Select(s => new LegendSeriesSnapshot(s.Id, s.SeriesName, s.IsVisible, s.IncludeInLegend, s.IsSelected, s.DataSeries?.Count ?? 0)).ToArray(),
             _controls.ToDictionary(p => p.Key, p => Bounds(p.Value)), _buttons["undo"].IsEnabled, _buttons["redo"].IsEnabled);
         Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.chartSceneLegends=" + JsonSerializer.Serialize(state, LegendsJsonContext.Default.LegendsSnapshot));
