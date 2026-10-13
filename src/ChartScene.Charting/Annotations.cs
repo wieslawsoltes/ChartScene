@@ -9,7 +9,7 @@ public enum AnnotationLayer { BelowSeries,AboveSeries }
 public enum HorizontalAnchorPoint { Left,Center,Right }
 public enum VerticalAnchorPoint { Top,Center,Bottom,Baseline }
 public enum AnnotationTextAlignment { Left,Center,Right }
-public class ChartAnnotation:ObservableObject
+public partial class ChartAnnotation:ObservableObject
 {
     private HorizontalAnchorPoint _horizontalAnchor;
     private VerticalAnchorPoint _verticalAnchor=VerticalAnchorPoint.Baseline;
