@@ -38,7 +38,10 @@ one undo entry; a stationary gesture does not discard an existing redo branch.
 Only the captured mouse/pen pointer may update, finish or dispatch another
 modifier during a gesture. The existing two-touch pinch handoff runs before that
 guard: a second touch first rolls back the width preview, then starts normal
-pinch navigation. A captured resize owns the cursor and avoids unrelated
+pinch navigation. `ChartSurface` only requests native capture for pointers the
+controller actually owns. Native capture loss/cancellation is routed through
+`CancelPointer`, so a foreign mouse/pen cannot cancel another gesture; uncaptured
+cancelled touches are removed rather than becoming phantom pinch participants. A captured resize owns the cursor and avoids unrelated
 rollover/snapshot work.
 
 Escape, cancellation, disabling, changed interaction mode or changed plot

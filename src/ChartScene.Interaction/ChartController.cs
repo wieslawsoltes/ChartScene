@@ -44,6 +44,15 @@ public sealed class ChartController:IDisposable
     public bool ZoomX { get; set; }=true;
     public bool ZoomY { get; set; }=true;
     public bool HasCapture=>_captured is not null||_pinchBefore is not null;
+    /// <summary>Whether this pointer owns the active mouse/pen gesture or participates in the active pinch.</summary>
+    public bool IsPointerCaptured(int pointerId)=>_captured is not null&&_capturePointer==pointerId
+        ||_pinchBefore is not null&&_touches.ContainsKey(pointerId);
+    /// <summary>Native pointer cancellation must not roll back a different pointer's gesture.</summary>
+    public void CancelPointer(int pointerId)
+    {
+        if(IsPointerCaptured(pointerId))Cancel();
+        else _touches.Remove(pointerId);
+    }
     public event EventHandler? ViewChanged;
     public event EventHandler<ChartAnnotation>? AnnotationEditRequested;
     public ChartController(ChartModel model)

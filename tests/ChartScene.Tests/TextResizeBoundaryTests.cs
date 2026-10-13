@@ -79,6 +79,36 @@ public static class TextResizeBoundaryTests
             TestSuite.True(f.Model.XAxis.VisibleRange!=range);f.Controller.Cancel();
             TestSuite.Equal(f.Model.XAxis.VisibleRange,range);TestSuite.True(!f.Controller.History.CanUndo);
         });
+        suite.Run("native pointer capture ownership rejects foreign cancellation",()=>
+        {
+            using var f=new Fixture();var p=f.Grip;
+            f.Controller.Process(new(ChartInputKind.Down,p,10));
+            f.Controller.Process(new(ChartInputKind.Move,p+new PointD(20,0),10));
+            TestSuite.True(f.Controller.IsPointerCaptured(10)&&!f.Controller.IsPointerCaptured(11));
+            f.Controller.Process(new(ChartInputKind.Down,p,11));f.Controller.CancelPointer(11);
+            TestSuite.True(f.Controller.IsPointerCaptured(10));TestSuite.Equal(f.Label.TextWrapWidth,180d);
+            f.Controller.CancelPointer(10);TestSuite.Equal(f.Label.TextWrapWidth,160d);
+            TestSuite.True(!f.Controller.HasCapture&&!f.Controller.IsPointerCaptured(10));
+        });
+        suite.Run("pinch participants own capture and unrelated cancellation is ignored",()=>
+        {
+            using var f=new Fixture();var p=f.Grip;var range=f.Model.XAxis.VisibleRange;
+            f.Controller.Process(new(ChartInputKind.Down,p,10,ChartPointerKind.Touch));
+            f.Controller.Process(new(ChartInputKind.Down,p+new PointD(-100,0),11,ChartPointerKind.Touch));
+            TestSuite.True(f.Controller.IsPointerCaptured(10)&&f.Controller.IsPointerCaptured(11)&&!f.Controller.IsPointerCaptured(12));
+            f.Controller.Process(new(ChartInputKind.Move,p+new PointD(-140,0),11,ChartPointerKind.Touch));
+            f.Controller.CancelPointer(12);TestSuite.True(f.Controller.HasCapture&&f.Model.XAxis.VisibleRange!=range);
+            f.Controller.CancelPointer(10);TestSuite.Equal(f.Model.XAxis.VisibleRange,range);
+            TestSuite.True(!f.Controller.IsPointerCaptured(10)&&!f.Controller.IsPointerCaptured(11));
+        });
+        suite.Run("cancelled uncaptured touch cannot become a phantom pinch participant",()=>
+        {
+            using var f=new Fixture();f.Controller.Process(new(ChartInputKind.Down,new(-100,-100),10,ChartPointerKind.Touch));
+            TestSuite.True(!f.Controller.HasCapture);f.Controller.CancelPointer(10);
+            f.Controller.Process(new(ChartInputKind.Down,f.Grip,11,ChartPointerKind.Touch));
+            TestSuite.True(f.Controller.Modifiers.OfType<TextAnnotationResizeModifier>().Single().IsResizing);
+            TestSuite.True(f.Controller.IsPointerCaptured(11)&&!f.Controller.IsPointerCaptured(10));
+        });
         foreach(var anchor in Enum.GetValues<HorizontalAnchorPoint>())
             suite.Run("overflow text width grip follows requested width not overflowing word "+anchor,()=>
             {
