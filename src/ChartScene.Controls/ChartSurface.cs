@@ -139,7 +139,7 @@ public class ChartSurface:UserControl,IDisposable
     {
         Focus(FocusState.Pointer);
         bool handled=_controller?.Process(Input(ChartInputKind.Down,e))??false;
-        if(_controller?.HasCapture==true) CapturePointer(e.Pointer);
+        if(_controller?.IsPointerCaptured(unchecked((int)e.Pointer.PointerId))==true) CapturePointer(e.Pointer);
         e.Handled=handled;
     }
     private void OnPointerMoved(object sender,PointerRoutedEventArgs e) { bool captured=_controller?.HasCapture==true; _controller?.Process(Input(ChartInputKind.Move,e)); if(captured) e.Handled=true; }
@@ -148,7 +148,7 @@ public class ChartSurface:UserControl,IDisposable
         bool captured=_controller?.HasCapture==true; _controller?.Process(Input(ChartInputKind.Up,e)); ReleasePointerCapture(e.Pointer); if(captured) e.Handled=true;
     }
     private void OnPointerWheel(object sender,PointerRoutedEventArgs e)=>e.Handled=_controller?.Process(Input(ChartInputKind.Wheel,e,e.GetCurrentPoint(this).Properties.MouseWheelDelta))??false;
-    private void OnPointerCanceled(object sender,PointerRoutedEventArgs e)=>_controller?.Cancel();
+    private void OnPointerCanceled(object sender,PointerRoutedEventArgs e)=>_controller?.CancelPointer(unchecked((int)e.Pointer.PointerId));
     private void OnKeyDown(object sender,KeyRoutedEventArgs e)
     {
         _keys.Add(e.Key);

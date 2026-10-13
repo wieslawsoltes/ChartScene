@@ -44,12 +44,21 @@ public sealed class ChartController:IDisposable
     public bool ZoomX { get; set; }=true;
     public bool ZoomY { get; set; }=true;
     public bool HasCapture=>_captured is not null||_pinchBefore is not null;
+    /// <summary>Whether this pointer owns the active mouse/pen gesture or participates in the active pinch.</summary>
+    public bool IsPointerCaptured(int pointerId)=>_captured is not null&&_capturePointer==pointerId
+        ||_pinchBefore is not null&&_touches.ContainsKey(pointerId);
+    /// <summary>Native pointer cancellation must not roll back a different pointer's gesture.</summary>
+    public void CancelPointer(int pointerId)
+    {
+        if(IsPointerCaptured(pointerId))Cancel();
+        else _touches.Remove(pointerId);
+    }
     public event EventHandler? ViewChanged;
     public event EventHandler<ChartAnnotation>? AnnotationEditRequested;
     public ChartController(ChartModel model)
     {
         Model=model;
-        Modifiers.AddRange([new LegendModifier(),new TextAnnotationEditModifier(),new MouseWheelZoomModifier(),new ZoomExtentsModifier(),new AnnotationDragModifier(),new AxisDragModifier(),new RubberBandXyZoomModifier(),new SeriesSelectionModifier(),new ZoomPanModifier()]);
+        Modifiers.AddRange([new LegendModifier(),new TextAnnotationResizeModifier(),new TextAnnotationEditModifier(),new MouseWheelZoomModifier(),new ZoomExtentsModifier(),new AnnotationDragModifier(),new AxisDragModifier(),new RubberBandXyZoomModifier(),new SeriesSelectionModifier(),new ZoomPanModifier()]);
     }
     public void SetFrame(ChartFrame frame) { Frame=frame; HitTester.SetFrame(frame); }
     public bool Process(ChartInput input)
@@ -83,6 +92,10 @@ public sealed class ChartController:IDisposable
             }
             if(input.Kind==ChartInputKind.Up) _touches.Remove(input.PointerId);
         }
+        // A captured pointer owns the gesture. Other mouse/pen IDs cannot steal it,
+        // dispatch another modifier, or trigger an unrelated rollover query.
+        // Two-touch pinch handoff is intentionally processed above this guard.
+        if(_captured is not null&&input.PointerId!=_capturePointer)return true;
         // A captured editor supplies its original-point overlay. A redundant rollover
         // would overwrite it and recreate changed source snapshots before rendering.
         if(input.Kind==ChartInputKind.Move && _captured is not IChartCursorOwner { OwnsCursor: true })

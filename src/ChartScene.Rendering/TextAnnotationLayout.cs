@@ -11,7 +11,7 @@ public readonly record struct AnnotationTextLine(string Text, PointD Baseline);
 /// rotation, padding and hit testing use one layout, not a character-width approximation.
 /// A layout belongs to the frame that measured it and never owns its canvas or model.
 /// </summary>
-public sealed class TextAnnotationLayout
+public sealed partial class TextAnnotationLayout
 {
     private readonly double _cos, _sin;
     private readonly TextStyle _style;
@@ -88,6 +88,13 @@ public sealed class TextAnnotationLayout
         }
         var result=new TextAnnotationLayout(anchor,new(left,top,w,h),annotation.ClipToPlot?plot:surface,
             annotation.RotationAngle,style,annotation.Background,annotation.BorderColor,annotation.BorderThickness,lines);
+        if(annotation.TextWrapping!=AnnotationTextWrapping.NoWrap && annotation.IsEditable)
+        {
+            // Keep X1/Y1 fixed: center-anchored text grows in both directions and right-anchored text grows left.
+            double factor=annotation.HorizontalAnchorPoint switch{HorizontalAnchorPoint.Center=>2,HorizontalAnchorPoint.Right=>-1,_=>1};
+            double edge=(annotation.TextWrapWidth+2*padding)/factor;
+            result.WidthGrip=new(result.ToScreen(new(edge,result.LocalBounds.Center.Y)),factor);
+        }
         return result.Corners.All(p=>p.IsFinite)&&double.IsFinite(result.Bounds.Width)&&double.IsFinite(result.Bounds.Height)?result:null;
     }
     public void Draw(IChartCanvas canvas,bool selected=false,ColorRgba? gripFill=null)
@@ -97,7 +104,11 @@ public sealed class TextAnnotationLayout
             canvas.DrawPath(_outline,_background,_border is { } color&&_borderWidth>0?new(color,_borderWidth):null);
         foreach(var line in Lines)if(line.Text.Length>0)canvas.DrawText(line.Text,line.Baseline,_style,TextAlignment.Left,RotationAngle);
         if(selected)
+        {
             foreach(var corner in Corners)canvas.DrawRectangle(new(corner.X-3,corner.Y-3,6,6),gripFill??ColorRgba.White,new(_style.Color,1));
+            if(WidthGrip is { } grip)
+                canvas.DrawEllipse(new(grip.Position.X-4,grip.Position.Y-4,8,8),gripFill??ColorRgba.White,new(_style.Color,1.5));
+        }
     }
 }
 

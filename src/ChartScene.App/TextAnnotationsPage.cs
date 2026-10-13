@@ -42,6 +42,9 @@ public sealed partial class TextAnnotationsPage:Page
             var button=new ChartToolButton(glyph,text);button.Describe(text);Register(id,button);_buttons.Add(id,button);tools.Children.Add(button);
             button.Click+=(_,_)=>{_actions++;_lastAction=id;_chart.Controller.Cancel();action();Refresh();Publish();};
         }
+        Add("properties",ChartGlyph.Settings,"Properties",ToggleInspector);
+        Add("selection",ChartGlyph.Select,"",()=>_label.IsSelected=!_label.IsSelected);
+        _buttons["selection"].Describe("Select annotation and show its width grip");
         Add("horizontal",ChartGlyph.Forward,"H: Left",()=>Edit("Horizontal anchor",()=>_label.HorizontalAnchorPoint,v=>_label.HorizontalAnchorPoint=v,(HorizontalAnchorPoint)(((int)_label.HorizontalAnchorPoint+1)%3)));
         Add("vertical",ChartGlyph.Columns,"V: Top",()=>Edit("Vertical anchor",()=>_label.VerticalAnchorPoint,v=>_label.VerticalAnchorPoint=v,(VerticalAnchorPoint)(((int)_label.VerticalAnchorPoint+1)%3)));
         Add("align",ChartGlyph.Menu,"Align",()=>Edit("Multiline alignment",()=>_label.TextAlignment,v=>_label.TextAlignment=v,(AnnotationTextAlignment)(((int)_label.TextAlignment+1)%3)));
@@ -56,9 +59,9 @@ public sealed partial class TextAnnotationsPage:Page
         Add("theme",ChartGlyph.Settings,"Theme",()=>{_light=!_light;Theme();});
         _root.Children.Add(new ScrollViewer{Content=tools,HorizontalScrollMode=ScrollMode.Enabled,HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,VerticalScrollMode=ScrollMode.Disabled,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled});
         _workspace.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});_workspace.ColumnDefinitions.Add(new(){Width=new GridLength(260)});
-        _chart.Model.Dispose();_chart.Model=_model;_workspace.Children.Add(_chart);Register("chart",_chart);
+        _chart.Model.Dispose();_chart.Model=_model;_widthResize=_chart.Controller.Modifiers.OfType<TextAnnotationResizeModifier>().Single();_workspace.Children.Add(_chart);Register("chart",_chart);
         _text.Text=_label.Text;Register("text",_text);
-        var panel=new StackPanel{Spacing=12};panel.Children.Add(new TextBlock{Text="ANNOTATION TEXT",FontSize=11,Opacity=.7});panel.Children.Add(_text);
+        var panel=new StackPanel{Spacing=12};panel.Children.Add(_text);
         var apply=new ChartToolButton(ChartGlyph.Source,"Apply text");apply.Describe("Apply annotation text");Register("apply",apply);_buttons.Add("apply",apply);panel.Children.Add(apply);
         apply.Click+=(_,_)=>{_actions++;_lastAction="apply";ApplyText(_text.Text);RefreshDraft();Publish();};
         var revert=new ChartToolButton(ChartGlyph.Undo,"Revert draft");revert.Describe("Discard unapplied text changes");Register("revert",revert);_buttons.Add("revert",revert);panel.Children.Add(revert);
@@ -67,8 +70,8 @@ public sealed partial class TextAnnotationsPage:Page
         BuildTypographyInspector(panel);
         BuildWrappingInspector(panel);
         _text.TextChanged+=(_,_)=>{RefreshDraft();Publish();};RefreshDraft();
-        panel.Children.Add(new TextBlock{Text="Click or drag anywhere in the label, not just its anchor. Double-click opens the native text editor.\n\nAlignment, rotation, font changes and text edits share chart undo/redo. Revert discards only the unapplied inspector draft.",FontSize=12,TextWrapping=TextWrapping.Wrap});
-        _inspector.Child=new ScrollViewer{Content=panel,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};Grid.SetColumn(_inspector,1);_workspace.Children.Add(_inspector);Register("inspector",_inspector);
+        panel.Children.Add(new TextBlock{Text="Select the label to show its round width grip when wrapping is enabled. Drag the grip to reflow text without moving its anchor. Drag the body to move; double-click to edit.\n\nAlignment, rotation, font changes and text edits share chart undo/redo. Revert discards only the unapplied inspector draft.",FontSize=12,TextWrapping=TextWrapping.Wrap});
+        _inspector.Child=BuildInspectorContent(panel);Grid.SetColumn(_inspector,1);_workspace.Children.Add(_inspector);Register("inspector",_inspector);
         Grid.SetRow(_workspace,1);_root.Children.Add(_workspace);Grid.SetRow(_status,2);_root.Children.Add(_status);Content=_root;
         var data=new XyDataSeries();data.AppendRange(Enumerable.Range(0,101).Select(i=>i*.1).ToArray(),Enumerable.Range(0,101).Select(i=>5+2*Math.Sin(i*.08)).ToArray());
         _model.RenderableSeries.Add(new FastLineRenderableSeries{DataSeries=data,SeriesName="Signal"});_model.Annotations.Add(_label);
@@ -131,9 +134,9 @@ public sealed partial class TextAnnotationsPage:Page
         _root.Background=_inspector.Background=Brush(theme.Background);_inspector.BorderBrush=Brush(theme.Border);_status.Foreground=_draftStatus.Foreground=Brush(theme.Muted);
         foreach(var button in _buttons.Values)button.ApplyTheme(theme);
     }
-    private void Resize(){bool visible=ActualWidth>=1100;_inspector.Visibility=visible?Visibility.Visible:Visibility.Collapsed;_workspace.ColumnDefinitions[1].Width=new GridLength(visible?260:0);}
     private void Refresh()
     {
+        _buttons["selection"].IsActive=_label.IsSelected;
         _buttons["horizontal"].Label="H: "+_label.HorizontalAnchorPoint;_buttons["vertical"].Label="V: "+_label.VerticalAnchorPoint;
         _buttons["font"].Label=_label.FontSize+" px";_buttons["bold"].IsActive=_label.FontBold;_buttons["background"].IsActive=_label.Background is not null;_buttons["flip"].IsActive=_model.YAxis.FlippedCoordinates;
         _buttons["italic"].IsActive=_label.FontSlant==FontSlant.Italic;
@@ -141,7 +144,7 @@ public sealed partial class TextAnnotationsPage:Page
         RefreshTypography();
         RefreshWrapping();
         _buttons["undo"].IsEnabled=_chart.Controller.History.CanUndo;_buttons["redo"].IsEnabled=_chart.Controller.History.CanRedo;
-        _status.Text=string.IsNullOrEmpty(_error)?$"{_label.HorizontalAnchorPoint} / {_label.VerticalAnchorPoint} · {_label.RotationAngle}° · {_label.FontSize} px · Drag body or double-click to edit":_error;
+        _status.Text=string.IsNullOrEmpty(_error)?$"{_label.HorizontalAnchorPoint} / {_label.VerticalAnchorPoint} · {_label.RotationAngle}° · {_label.FontSize} px · {WidthHint()}":_error;
         RefreshDraft();
     }
     private static FrameworkElement? Find(DependencyObject root,string name)
@@ -174,13 +177,15 @@ public sealed partial class TextAnnotationsPage:Page
             _label.RotationAngle,_label.FontSize,_label.FontBold,_label.TextAlignment.ToString(),_label.Background is not null,_model.Theme.Name,
             _label.IsSelected,_label.X1,_label.Y1,_chart.FrameCount,_chart.Controller.History.CanUndo,_chart.Controller.History.CanRedo,_dialog is not null,
             _actions,_lastAction,layout is null?null:Rect(layout.Bounds),layout is null?null:Point(layout.Anchor),layout?.Corners.Select(Point).ToArray()??[],layout?.Lines.Count??0,
-            _controls.ToDictionary(p=>p.Key,p=>Bounds(p.Value)),_text.Text,HasDraft,_buttons["revert"].IsEnabled,Typography(),Wrapping());
+            _controls.ToDictionary(p=>p.Key,p=>Bounds(p.Value)),_text.Text,HasDraft,_buttons["revert"].IsEnabled,Typography(),Wrapping(),
+            new TextResizeSnapshot(_widthResize.IsResizing,_label.IsSelected&&layout?.WidthGrip is { } grip?Point(grip.Position):null,
+                layout?.WidthGrip?.WidthPerPixel??0,InspectorOpen,CompactInspector));
         Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.chartSceneText="+JsonSerializer.Serialize(snapshot,TextPageJsonContext.Default.TextPageSnapshot));
 #endif
     }
 }
 public sealed record TextPointDto(double x,double y);
 public sealed record TextPageSnapshot(bool ready,string? error,string text,string horizontal,string vertical,double rotation,double fontSize,bool bold,string alignment,bool background,string theme,
-    bool selected,double x1,double y1,long frames,bool canUndo,bool canRedo,bool dialog,long actions,string lastAction,ControlBounds? body,TextPointDto? anchor,TextPointDto[] corners,int lines,Dictionary<string,ControlBounds?> controls,string editorText,bool hasDraft,bool revertEnabled,TextTypographySnapshot typography,TextWrappingSnapshot wrapping);
+    bool selected,double x1,double y1,long frames,bool canUndo,bool canRedo,bool dialog,long actions,string lastAction,ControlBounds? body,TextPointDto? anchor,TextPointDto[] corners,int lines,Dictionary<string,ControlBounds?> controls,string editorText,bool hasDraft,bool revertEnabled,TextTypographySnapshot typography,TextWrappingSnapshot wrapping,TextResizeSnapshot resize);
 [JsonSerializable(typeof(TextPageSnapshot))]
 public partial class TextPageJsonContext:JsonSerializerContext;
