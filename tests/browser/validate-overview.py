@@ -62,8 +62,14 @@ with sync_playwright() as playwright:
         # actual state instead of letting Enter reopen it after premature key events.
         if not state()['presetOpen']: click('preset')
         page.wait_for_function('window.chartSceneOverview.presetOpen===true')
+        # An open popup is not proof that its native item owns keyboard focus.
+        # Observe each dispatched key's result; do not synthesize focus or selection.
+        page.wait_for_function('window.chartSceneOverview.presetFocusedIndex>=0')
         page.keyboard.press('Home')
-        for _ in range(index): page.keyboard.press('ArrowDown')
+        page.wait_for_function('window.chartSceneOverview.presetFocusedIndex===0')
+        for position in range(index):
+            page.keyboard.press('ArrowDown')
+            page.wait_for_function('i=>window.chartSceneOverview.presetFocusedIndex===i', arg=position+1)
         page.keyboard.press('Enter')
         identifier = ['million','logarithmic','streaming','heatmap'][index]
         ready(identifier)
@@ -94,7 +100,7 @@ with sync_playwright() as playwright:
         except Exception as error:
             results.append({'name':name,'passed':False,'error':str(error),'trace':traceback.format_exc()})
             print('FAIL',name,str(error),flush=True)
-            screenshot(name.replace(' ','-')+'-failure'); (out/'failure-state.json').write_text(json.dumps(state(),indent=2))
+            screenshot(name.replace(' ','-')+'-failure'); (out/(name.replace(' ','-')+'-state.json')).write_text(json.dumps(state(),indent=2))
         finally:
             (out/'results.json').write_text(json.dumps({'total':len(results),'failed':sum(not r['passed'] for r in results),'tests':results},indent=2))
             (out/'console.json').write_text(json.dumps(logs,indent=2))

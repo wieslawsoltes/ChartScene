@@ -49,7 +49,7 @@ public sealed class ChartController:IDisposable
     public ChartController(ChartModel model)
     {
         Model=model;
-        Modifiers.AddRange([new LegendModifier(),new MouseWheelZoomModifier(),new ZoomExtentsModifier(),new AnnotationDragModifier(),new AxisDragModifier(),new RubberBandXyZoomModifier(),new SeriesSelectionModifier(),new ZoomPanModifier()]);
+        Modifiers.AddRange([new LegendModifier(),new TextAnnotationEditModifier(),new MouseWheelZoomModifier(),new ZoomExtentsModifier(),new AnnotationDragModifier(),new AxisDragModifier(),new RubberBandXyZoomModifier(),new SeriesSelectionModifier(),new ZoomPanModifier()]);
     }
     public void SetFrame(ChartFrame frame) { Frame=frame; HitTester.SetFrame(frame); }
     public bool Process(ChartInput input)
@@ -156,7 +156,7 @@ public sealed class ChartController:IDisposable
     public double Fraction(AxisModel axis,PointD point)
     {
         if(Frame is null) return .5;
-        var p=Frame.Layout.PlotArea;
+        var p=Frame!.Layout.PlotArea;
         double value=axis.IsVertical?(point.Y-p.Y)/p.Height:(point.X-p.X)/p.Width;
         return axis.IsVertical^axis.FlippedCoordinates?1-value:value;
     }
@@ -357,7 +357,7 @@ public sealed class AnnotationDragModifier:ChartModifier
     private sealed record State(double X1,double Y1,double X2,double Y2,PointD[] Points)
     {
         public static State Capture(ChartAnnotation a)=>new(a.X1,a.Y1,a.X2,a.Y2,a.Points.ToArray());
-        public void Restore(ChartAnnotation a) { a.X1=X1; a.Y1=Y1; a.X2=X2; a.Y2=Y2; a.Points.Clear(); foreach(var p in Points) a.Points.Add(p); }
+        public void Restore(ChartAnnotation a) { a.X1=X1; a.Y1=Y1; a.X2=X2; a.Y2=Y2; a.Points.Clear(); foreach(var point in Points) a.Points.Add(point); }
     }
     private ChartAnnotation? _annotation;
     private State? _before;
@@ -369,8 +369,12 @@ public sealed class AnnotationDragModifier:ChartModifier
         var plot=c.Frame!.Layout.PlotArea;
         if(input.Kind==ChartInputKind.Down)
         {
-            if(!plot.Contains(input.Position)) return ModifierResult.Unhandled;
-            _annotation=c.Model.Annotations.Reverse().FirstOrDefault(a=>a.IsVisible&&a.IsEditable&&AnnotationGeometry.HitDistance(c.Model,a,plot,input.Position)<=8);
+            bool withinPlot=plot.Contains(input.Position);
+            _annotation=c.Model.Annotations.Reverse().FirstOrDefault(a=>a.IsVisible&&a.IsEditable&&(withinPlot||a.Kind==AnnotationKind.Text)&&AnnotationGeometry.HitDistance(c.Model,a,plot,input.Position,c.Frame)<=8);
+            // Unclipped text can be painted in the surface's axis/header margins.
+            // Its measured body wins over axis navigation there, while creation and
+            // other annotation gestures remain confined to the plot.
+            if(_annotation is null&&!withinPlot)return ModifierResult.Unhandled;
             _created=false;
             if(_annotation is null&&c.Mode==ChartInteractionMode.DrawAnnotation)
             {
@@ -382,7 +386,7 @@ public sealed class AnnotationDragModifier:ChartModifier
             foreach(var a in c.Model.Annotations) a.IsSelected=ReferenceEquals(a,_annotation);
             _before=State.Capture(_annotation); _startValue=AnnotationGeometry.ToValues(c.Model,_annotation,plot,input.Position);
             var(a1,a2)=AnnotationGeometry.Endpoints(c.Model,_annotation,plot);
-            _handle=_created?2:(input.Position-a1).LengthSquared<64?1:(input.Position-a2).LengthSquared<64?2:0;
+            _handle=_annotation.Kind==AnnotationKind.Text?0:_created?2:(input.Position-a1).LengthSquared<64?1:(input.Position-a2).LengthSquared<64?2:0;
             return ModifierResult.Capture;
         }
         if(_annotation is null||_before is null) return ModifierResult.Unhandled;
@@ -398,6 +402,8 @@ public sealed class AnnotationDragModifier:ChartModifier
         if(input.Kind==ChartInputKind.Up)
         {
             var annotation=_annotation; var before=_before; var after=State.Capture(annotation);
+            if(!_created&&annotation.Kind==AnnotationKind.Text&&before.X1==after.X1&&before.Y1==after.Y1)
+            { _annotation=null; _before=null; return ModifierResult.Handled; }
             if(_created) c.History.RecordExecuted(new DelegateCommand("Create annotation",()=>c.Model.Annotations.Add(annotation),()=>c.Model.Annotations.Remove(annotation)));
             else c.History.RecordExecuted(new DelegateCommand("Edit annotation",()=>after.Restore(annotation),()=>before.Restore(annotation)));
             if(_created&&annotation.Kind==AnnotationKind.Text) c.RequestAnnotationEdit(annotation);
