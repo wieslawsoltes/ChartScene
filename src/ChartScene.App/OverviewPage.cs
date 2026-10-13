@@ -60,6 +60,7 @@ public sealed class OverviewPage : Page
         Register("chart", _chart); Register("overview", _overview); Register("scrollbar", _scrollbar);
         _overview.ParentSurface = _chart;
         _preset.SelectionChanged += (_, _) => { if (!_changing && IsLoaded) LoadPreset(_preset.SelectedIndex); };
+        _preset.DropDownOpened += (_, _) => Publish(); _preset.DropDownClosed += (_, _) => Publish();
         _chart.RenderCompleted += (_, _) => Publish(); _overview.RenderCompleted += (_, _) => Publish(); _scrollbar.RenderCompleted += (_, _) => Publish();
         _diagnostics.Tick += (_, _) => Publish(); _stream.Tick += (_, _) => Append();
         Loaded += (_, _) => { if (_model is null) LoadPreset(0); _diagnostics.Start(); };
@@ -171,6 +172,14 @@ public sealed class OverviewPage : Page
         return new(Rect(layout.Track), Rect(layout.Selection), bounds.x + layout.MinimumGrip.X, bounds.y + layout.MinimumGrip.Y,
             bounds.x + layout.MaximumGrip.X, bounds.y + layout.MaximumGrip.Y);
     }
+    private int PresetFocusedIndex()
+    {
+        if (XamlRoot is not { } root) return -1;
+        for (DependencyObject? focused = FocusManager.GetFocusedElement(root) as DependencyObject;
+            focused is not null; focused = VisualTreeHelper.GetParent(focused))
+            if (focused is ComboBoxItem item) return _preset.IndexFromContainer(item);
+        return -1;
+    }
     private void Publish()
     {
         if (!IsLoaded || _model is null) return;
@@ -186,7 +195,7 @@ public sealed class OverviewPage : Page
             _model.RenderableSeries[0].DataSeries?.Count ?? _model.RenderableSeries[0].HeatmapGrid?.Values.Length ?? 0,
             _model.RenderableSeries[0].DataSeries?.Revision ?? 0, _overview.PreviewBuildCount, _chart.FrameCount, _overview.FrameCount,
             _chart.Controller.History.CanUndo, _chart.Controller.History.CanRedo, Layout(_overview), Layout(_scrollbar),
-            _controls.ToDictionary(p => p.Key, p => Bounds(p.Value)));
+            _controls.ToDictionary(p => p.Key, p => Bounds(p.Value)), PresetFocusedIndex());
         Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.chartSceneOverview=" + JsonSerializer.Serialize(snapshot, OverviewJsonContext.Default.OverviewSnapshot));
 #endif
     }
@@ -196,6 +205,6 @@ public sealed record OverviewLayoutSnapshot(ControlBounds track, ControlBounds s
 public sealed record OverviewSnapshot(bool ready, string? error, string preset, bool presetOpen, int generation, bool streaming, string theme, bool flipped,
     double min, double max, double yMin, double yMax, double fullMin, double fullMax, int sourcePoints, long dataRevision,
     long previewBuilds, long chartFrames, long overviewFrames, bool canUndo, bool canRedo, OverviewLayoutSnapshot? overview,
-    OverviewLayoutSnapshot? scrollbar, Dictionary<string, ControlBounds?> controls);
+    OverviewLayoutSnapshot? scrollbar, Dictionary<string, ControlBounds?> controls, int presetFocusedIndex);
 [JsonSerializable(typeof(OverviewSnapshot))]
 public partial class OverviewJsonContext : JsonSerializerContext;
