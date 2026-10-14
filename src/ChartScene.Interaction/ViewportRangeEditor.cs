@@ -106,15 +106,15 @@ public sealed class ViewportRangeEditor : IDisposable
         if (X.Error is not null || Y.Error is not null) return RangeApplyResult.Invalid;
         if (!X.HasChanges && !Y.HasChanges) return RangeApplyResult.Unchanged;
         var changes = new List<RangeChange>(2);
-        Add(X); Add(Y);
+        AddChange(changes, X); AddChange(changes, Y);
         var command = new RangeCommand(this, changes.ToArray());
         if (!command.Move(false)) { Refresh(); return RangeApplyResult.Superseded; }
         history.RecordExecuted(command); if (!IsStale) Revert(); return RangeApplyResult.Applied;
-        void Add(AxisRangeDraft draft)
-        {
-            if (draft.HasChanges) changes.Add(new(draft.Axis, draft.Baseline,
-                draft.Baseline with { Range = draft.Parsed, Policy = AutoRange.Never }));
-        }
+    }
+    private static void AddChange(List<RangeChange> changes, AxisRangeDraft draft)
+    {
+        if (draft.HasChanges) changes.Add(new(draft.Axis, draft.Baseline,
+            draft.Baseline with { Range = draft.Parsed, Policy = AutoRange.Never }));
     }
     public void Dispose() => _disposed = true;
 

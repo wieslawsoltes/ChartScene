@@ -5,7 +5,7 @@ The target is publicly documented SciChart WPF behavior. This is a capability in
 | Area | Current implementation | Remaining boundary |
 | --- | --- | --- |
 | Data and numerics | Columnar mutation, FIFO, snapshots, revision-checked point edits, XY/XYZ/OHLC/statistical/heatmap types; resampling, splines, FFT, statistics and indicators | Complete generic data-series APIs, mutation invariants, filter/transform suite and extreme-value conformance |
-| Axes and layout | Numeric/log/UTC date/timespan/category models, multiple axes, flips, grow-by, formatting, aspect constraints and negotiated plot margins | Full category-date semantics, viewport providers, WPF bindings/templates and reference tick/label parity |
+| Axes and layout | Numeric/log/UTC date/timespan/category models, multiple axes, flips, grow-by, formatting, aspect constraints, negotiated plot margins and lossless primary-range drafts with conflict detection | Full category-date semantics, viewport providers, WPF bindings/templates and reference tick/label parity |
 | 2D series | 29 kinds across Cartesian, polar, circular and ternary geometry | Additional variants, complete properties/styles, custom rendering contracts, labels and animations |
 | Interaction | Pan, wheel/rectangle zoom, axis drag, cursor/rollover, selection, editable annotations, keyboard/touch, undo/redo; guarded Y dragging for nine Cartesian two-channel series kinds | X-coordinate, multi-channel financial, stacked and non-Cartesian editing; exact curved/stacked/polar hit-test and interpolation coverage; full custom modifier behavior |
 | Synchronization | Canonical-unit X range/cursor groups, negotiated plot alignment and reusable Uno lifecycle/model-replacement adapter | Cartesian cursors only; no arbitrary shared WPF mouse-event routing or full reference layout-group equivalence |
@@ -15,7 +15,7 @@ The target is publicly documented SciChart WPF behavior. This is a capability in
 | Export and persistence | CPU offscreen PNG plus actual browser PNG/CSV downloads | Full chart-document serialization/save/load, XML/XAML interchange, PDF/SVG/XPS and printing |
 | Packaging | 12 packages, isolated desktop/browser consumers | Requires successful consumer CI; package artifacts do not imply publication to NuGet.org |
 | Rendering and performance | Skia, GL/GLES, indexed extrema queries, unchanged-viewport/picture caching, visible-cell traversal, contour caches, settled legend updates, captured editor cursor ownership and persistent GPU geometry | No dedicated WebGPU, hardware benchmark parity, zero-copy compositor or complete extended stress/device-loss qualification |
-| Visual fidelity | Independent examples workbench, compact vector commands, themed native legends, point inspector and responsive annotation properties pane | Pixel-identical SciChart WPF themes, icons, layout and typography have not been established |
+| Visual fidelity | Independent examples workbench, compact vector commands, themed native legends, point inspector, pinned responsive properties panes and native range validation | Pixel-identical SciChart WPF themes, icons, layout and typography have not been established |
 
 ## Prioritized next work
 
