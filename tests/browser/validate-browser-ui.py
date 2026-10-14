@@ -201,6 +201,8 @@ with sync_playwright() as playwright:
             page.wait_for_function("window.chartSceneBrowser.searchDismissed && window.chartScene.controls['navigation-panel']===null")
             assert chrome()['modelLoads']==loads
         test('keyboard traversal reopens dismissed search without loading a model',keyboard_search_focus)
+        from range_inspector_cases import register
+        register(test,page,inputs,module,out)
         def clean():assert not [entry for entry in logs if entry['type']=='pageerror'],logs
         test('examples workbench has no unhandled browser errors',clean)
         (out/'final-state.json').write_text(json.dumps({'chart':state(),'browser':chrome()},indent=2))

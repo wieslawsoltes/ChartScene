@@ -4,6 +4,8 @@ public static partial class AdditionalTests
     {
         TextResizeBoundaryTests.Register(suite);
         TextResizeTests.Register(suite);
+        ViewportRangeEditorTests.Register(suite);
+        ViewportRangeBoundaryTests.Register(suite);
         TextWrappingTests.Register(suite);
         TextTypographyTests.Register(suite);
         TextAnnotationLookupTests.Register(suite);

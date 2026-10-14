@@ -62,7 +62,7 @@ public sealed partial class MainPage : Page
     private IReadOnlyList<ChartExample>? _shownResults;
     private ChartExample _example = SampleCatalog.Find("overview");
     private ChartModel? _model;
-    private bool _changing, _streaming, _navigationOpen, _inspectorOpen = true, _inspectorPinned, _sourceLoaded, _searchDismissed;
+    private bool _changing, _streaming, _navigationOpen, _sourceLoaded, _searchDismissed;
     private int _tileColumns, _navigationBuilds;
     private long _modelLoads, _actionSequence;
     private double _nextTime = 10;
@@ -206,7 +206,7 @@ public sealed partial class MainPage : Page
         _sourceTab = Button("source-tab",ChartGlyph.Source,"Source code",()=>ShowDocument(Document.Source),"View the actual shared sample-factory C# source"); commands.Children.Add(_sourceTab);
         commands.Children.Add(Button("export-png",ChartGlyph.Download,"PNG",async()=>await ExportPngAsync(),"Download chart PNG"));
         commands.Children.Add(Button("export-csv",ChartGlyph.Download,"CSV",async()=>await ExportCsvAsync(),"Download first visible series as CSV"));
-        _info = Button("info-toggle",ChartGlyph.Info,"",()=>{_inspectorPinned=true;_inspectorOpen=_inspectorColumn.Width.Value==0;ResizeWorkspace();},"Show or hide example information"); commands.Children.Add(_info);
+        _info = Button("info-toggle",ChartGlyph.Info,"",ToggleInfo,"Show or hide example properties"); commands.Children.Add(_info);
         Grid.SetColumn(commands,1); row.Children.Add(commands); Root(Panel(row,new Thickness(0,0,0,1)),1);
     }
     private void BuildWorkspace()
@@ -238,12 +238,10 @@ public sealed partial class MainPage : Page
         Register("legend-toggle",_legendToggle);Register("cursor-toggle",_cursorToggle);Register("labels-toggle",_labelsToggle);
         inspector.Children.Add(new TextBlock{Text="Annotation type",FontSize=11});foreach(var kind in Enum.GetValues<AnnotationKind>())_annotationKind.Items.Add(kind);_annotationKind.SelectedItem=AnnotationKind.Box;
         inspector.Children.Add(_annotationKind);Register("annotation-kind",_annotationKind);
-        inspector.Children.Add(new TextBlock{Text="VISIBLE RANGE",FontSize=10,Opacity=.6});inspector.Children.Add(RangeEditor("X",_xMin,_xMax));inspector.Children.Add(RangeEditor("Y",_yMin,_yMax));
-        Register("x-min",_xMin);Register("x-max",_xMax);Register("y-min",_yMin);Register("y-max",_yMax);
-        inspector.Children.Add(Button("apply-ranges",ChartGlyph.Settings,"Apply ranges",ApplyRanges,"Apply finite ordered axis ranges"));
+        BuildRangeInspector(inspector);
         var data=new Expander{Header="Data and rendering",Content=_dataSummary,HorizontalAlignment=HorizontalAlignment.Stretch};inspector.Children.Add(data);Register("data-expander",data);
         inspector.Children.Add(new TextBlock{Text="Independent ChartScene implementation. Full SciChart WPF compatibility is an ongoing target.",FontSize=10,TextWrapping=TextWrapping.Wrap,Opacity=.55});
-        var info=Panel(new ScrollViewer{Content=inspector,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled},new Thickness(1,0,0,0));Grid.SetColumn(info,3);_workspace.Children.Add(info);Register("inspector-panel",info);
+        var info=Panel(PropertiesPane(inspector),new Thickness(1,0,0,0));Grid.SetColumn(info,3);_workspace.Children.Add(info);Register("inspector-panel",info);
         Root(_workspace,2);
     }
     private Grid RangeEditor(string label,TextBox minimum,TextBox maximum)
@@ -322,7 +320,7 @@ public sealed partial class MainPage : Page
             _chart.Controller.AnnotationKind=_annotationKind.SelectedItem is AnnotationKind kind?kind:AnnotationKind.Box;
             _chart.Controller.AnnotationEditRequested+=async(_,annotation)=>await EditAnnotationTextAsync(annotation);
             _dataSummary.Text=string.Join("\n",_model.RenderableSeries.Select(s=>$"{s.SeriesName}: {s.DataSeries?.Count??s.HeatmapGrid?.Values.Length??0:N0} samples · {s.Kind}"));
-            SetMode(ChartInteractionMode.Pan);ApplyTheme();UpdateRangeEditors();_messageUntil=DateTime.MinValue;_chart.RequestRender();
+            SetMode(ChartInteractionMode.Pan);ApplyTheme();ResetRangeEditor();_messageUntil=DateTime.MinValue;_chart.RequestRender();
         }
         finally{_changing=false;}
     }
@@ -346,27 +344,11 @@ public sealed partial class MainPage : Page
         foreach(var panel in _panels){panel.Background=Brush(next.Background);panel.BorderBrush=Brush(next.Border);}
         foreach(var button in _buttons)button.ApplyTheme(next);
         _root.Background=Brush(next.Background);_center.Background=Brush(next.PlotBackground);_source.Background=Brush(next.Background);_source.Foreground=Brush(next.Foreground);
-        _status.Foreground=_breadcrumb.Foreground=Brush(next.Muted);_navigation.Background=Brush(next.Background);
+        _status.Foreground=_breadcrumb.Foreground=_rangeStatus.Foreground=Brush(next.Muted);_navigation.Background=Brush(next.Background);
     }
     private void SetLegend(bool value){if(!_changing&&_model is not null)_model.ShowLegend=value;}
     private void SetCursor(bool value){if(_changing||_model is null)return;_chart.Controller.View.ShowCursor=value;_chart.Controller.View.ShowRollover=value;_chart.RequestRender();}
     private void SetLabels(bool value){if(_changing||_model is null)return;using(_model.SuspendUpdates())foreach(var series in _model.RenderableSeries)series.ShowDataLabels=value;}
-    private void UpdateRangeEditors()
-    {
-        if(_model is null)return;
-        _xMin.Text=_model.XAxis.VisibleRange.Min.ToString("G8",CultureInfo.InvariantCulture);_xMax.Text=_model.XAxis.VisibleRange.Max.ToString("G8",CultureInfo.InvariantCulture);
-        _yMin.Text=_model.YAxis.VisibleRange.Min.ToString("G8",CultureInfo.InvariantCulture);_yMax.Text=_model.YAxis.VisibleRange.Max.ToString("G8",CultureInfo.InvariantCulture);
-    }
-    private void ApplyRanges()
-    {
-        if(_model is null)return;
-        double Parse(TextBox box)=>double.Parse(box.Text,CultureInfo.InvariantCulture);
-        var x=new DoubleRange(Parse(_xMin),Parse(_xMax));var y=new DoubleRange(Parse(_yMin),Parse(_yMax));
-        if(_model.XAxis.Scale==AxisScale.Logarithmic&&x.Min<=0||_model.YAxis.Scale==AxisScale.Logarithmic&&y.Min<=0)throw new ArgumentOutOfRangeException("Logarithmic ranges must be positive.");
-        var before=new ViewportSnapshot(_model);
-        using(_model.SuspendUpdates()){_model.XAxis.AutoRange=_model.YAxis.AutoRange=AutoRange.Never;_model.XAxis.VisibleRange=x;_model.YAxis.VisibleRange=y;}
-        _chart.Controller.RecordViewport("Set ranges",before);ShowMessage("Visible ranges updated");
-    }
     private void PauseStream(){_streaming=false;_streamTimer.Stop();if(_play is not null){_play.Glyph=ChartGlyph.Play;_play.IsActive=false;}}
     private void ToggleStreaming()
     {
@@ -418,12 +400,9 @@ public sealed partial class MainPage : Page
     {
         if(!_controls.ContainsKey("inspector-panel"))return;
         double width=ActualWidth;
-        bool catalogue=_journal.HasCurrent&&_journal.Current.Document==Document.Catalogue;
         _navigationColumn.Width=new GridLength(_navigationOpen?Math.Min(235,Math.Max(160,width*.3)):0);
-        bool showInfo=_inspectorOpen&&!catalogue&&(width>=1150||_inspectorPinned);
-        _inspectorColumn.Width=new GridLength(showInfo?Math.Min(285,width*.45):0);
         _controls["navigation-panel"].Visibility=_navigationOpen?Visibility.Visible:Visibility.Collapsed;
-        _controls["inspector-panel"].Visibility=showInfo?Visibility.Visible:Visibility.Collapsed;_info.IsActive=showInfo;
+        ArrangeInfo();
         int columns=Math.Clamp((int)Math.Max(1,(width-100)/320),1,4);
         if(columns!=_tileColumns)
         {
@@ -455,6 +434,7 @@ public sealed partial class MainPage : Page
     private void PublishSnapshot()
     {
         if(!IsLoaded||_model is null)return;
+        UpdateRangeEditors();
         var frame=_chart.LastFrame;
         PublishCatalogue();
         PlatformBridge.Publish(new DiagnosticSnapshot
@@ -467,11 +447,11 @@ public sealed partial class MainPage : Page
             controls=_controls.ToDictionary(p=>p.Key,p=>Bounds(p.Value)),catalog=_catalogDtos
         });
 #if __WASM__
-        var state=new BrowserSnapshot(_journal.HasCurrent?_journal.Current.Document.ToString():"Example",_journal.CanGoBack,_journal.CanGoForward,_modelLoads,_navigationBuilds,_searchIndex.Statistics.Executions,_shownResults?.Count??0,_sourceLoaded,_theme.IsDropDownOpen,ThemeFocusedIndex(),_actionSequence,_lastAction,_navigationOpen,_searchDismissed,IsSearchFocused());
+        var state=new BrowserSnapshot(_journal.HasCurrent?_journal.Current.Document.ToString():"Example",_journal.CanGoBack,_journal.CanGoForward,_modelLoads,_navigationBuilds,_searchIndex.Statistics.Executions,_shownResults?.Count??0,_sourceLoaded,_theme.IsDropDownOpen,ThemeFocusedIndex(),_actionSequence,_lastAction,_navigationOpen,_searchDismissed,IsSearchFocused(),RangeInspector());
         Uno.Foundation.WebAssemblyRuntime.InvokeJS("window.chartSceneBrowser="+JsonSerializer.Serialize(state,BrowserJsonContext.Default.BrowserSnapshot));
 #endif
     }
 }
-public sealed record BrowserSnapshot(string document,bool canBack,bool canForward,long modelLoads,int navigationBuilds,long searchExecutions,int resultCount,bool sourceLoaded,bool themeDropDownOpen,int themeFocusedIndex,long actionSequence,string lastAction,bool navigationOpen,bool searchDismissed,bool searchFocused);
+public sealed record BrowserSnapshot(string document,bool canBack,bool canForward,long modelLoads,int navigationBuilds,long searchExecutions,int resultCount,bool sourceLoaded,bool themeDropDownOpen,int themeFocusedIndex,long actionSequence,string lastAction,bool navigationOpen,bool searchDismissed,bool searchFocused,RangeInspectorSnapshot? rangeEditor);
 [JsonSerializable(typeof(BrowserSnapshot))]
 public partial class BrowserJsonContext:JsonSerializerContext;
