@@ -58,6 +58,18 @@ strings are not reassigned, and dirty input is not replaced during a redraw,
 source-code view, module reattachment or properties-pane toggle. Property updates
 are skipped when both draft versions remain unchanged.
 
+The first full browser run saved 23/24 passing workbench cases; live-X typing
+never observed the requested Y text. Its pointer trace confirmed one delivered
+click, but that alone does not establish keyboard-focus completion. The input
+helper now acknowledges actual native focus before sending keys. Independently,
+review identified a read/write race: native Text can change before its routed
+TextChanged callback updates the draft. Refresh now captures differences from
+the last published native text before observing live axes, and writes only axes
+whose draft versions changed. Explicit Revert bypasses this capture to discard
+pending input. Repeated Y edits during streaming and a dirty moving-X conflict
+are required browser regressions. These checks add observations and coverage;
+no input is injected into application state and no timeout/tolerance is relaxed.
+
 Browser diagnostics observe actual native TextBox strings, enabled buttons and
 layout rectangles. Added cases use real mouse, keyboard and native scrolling;
 no application-state assignment, synthetic control events or DOM scrolling is

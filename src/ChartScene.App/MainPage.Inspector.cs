@@ -16,6 +16,7 @@ public sealed partial class MainPage
     private readonly TextBlock _rangeUnits = new() { FontSize = 10, TextWrapping = TextWrapping.Wrap, Opacity = .7 };
     private bool _syncRanges, _compactInfoOpen, _wideInfoClosed;
     private long _rangeXVersion = -1, _rangeYVersion = -1;
+    private string _publishedXMinimum = "", _publishedXMaximum = "", _publishedYMinimum = "", _publishedYMaximum = "";
     private bool CompactInfo => ActualWidth < 1150;
     private bool InfoVisible => (!_journal.HasCurrent || _journal.Current.Document != Document.Catalogue) &&
         (CompactInfo ? _compactInfoOpen : !_wideInfoClosed);
@@ -93,14 +94,36 @@ public sealed partial class MainPage
     private void UpdateRangeEditors()
     {
         if (_syncRanges || _changing || _rangeEditor is not { } editor) return;
+        // Native Text may already contain input whose routed TextChanged callback has
+        // not run. Capture it before a live frame can write the old draft back over it.
+        // A reset/revert deliberately invalidates published versions and skips capture.
+        if (_rangeXVersion >= 0)
+        {
+            if (_xMin.Text != _publishedXMinimum) editor.X.MinimumText = _xMin.Text;
+            if (_xMax.Text != _publishedXMaximum) editor.X.MaximumText = _xMax.Text;
+        }
+        if (_rangeYVersion >= 0)
+        {
+            if (_yMin.Text != _publishedYMinimum) editor.Y.MinimumText = _yMin.Text;
+            if (_yMax.Text != _publishedYMaximum) editor.Y.MaximumText = _yMax.Text;
+        }
         editor.Refresh();
-        if (_rangeXVersion == editor.X.Version && _rangeYVersion == editor.Y.Version && !editor.IsStale) return;
+        bool changedX = _rangeXVersion != editor.X.Version, changedY = _rangeYVersion != editor.Y.Version;
+        if (!changedX && !changedY && !editor.IsStale) return;
         _rangeXVersion = editor.X.Version; _rangeYVersion = editor.Y.Version;
         _syncRanges = true;
         try
         {
-            Set(_xMin, editor.X.MinimumText); Set(_xMax, editor.X.MaximumText);
-            Set(_yMin, editor.Y.MinimumText); Set(_yMax, editor.Y.MaximumText);
+            if (changedX)
+            {
+                Set(_xMin, editor.X.MinimumText); Set(_xMax, editor.X.MaximumText);
+                _publishedXMinimum = _xMin.Text; _publishedXMaximum = _xMax.Text;
+            }
+            if (changedY)
+            {
+                Set(_yMin, editor.Y.MinimumText); Set(_yMax, editor.Y.MaximumText);
+                _publishedYMinimum = _yMin.Text; _publishedYMaximum = _yMax.Text;
+            }
             _applyRangesButton.IsEnabled = editor.CanApply;
             _revertRangesButton.IsEnabled = editor.HasDraft || editor.HasConflict;
             _rangeStatus.Text = editor.HasConflict ? "Viewport changed. Revert before applying these drafts." :
@@ -114,8 +137,10 @@ public sealed partial class MainPage
     private void ApplyRanges()
     {
         if (_rangeEditor is null) return;
+        UpdateRangeEditors(); // Include native input even if its change notification is queued.
         _chart.Controller.Cancel();
         var result = _rangeEditor.Apply(_chart.Controller.History);
+        if (result == RangeApplyResult.Applied) _rangeXVersion = _rangeYVersion = -1;
         UpdateRangeEditors();
         ShowMessage(result switch
         {
@@ -129,6 +154,7 @@ public sealed partial class MainPage
     {
         if (_rangeEditor is null) return;
         if (_rangeEditor.IsStale) ResetRangeEditor(); else _rangeEditor.Revert();
+        _rangeXVersion = _rangeYVersion = -1; // Explicit Revert discards even not-yet-notified native input.
         UpdateRangeEditors(); PublishSnapshot();
     }
     private RangeInspectorSnapshot? RangeInspector() => _rangeEditor is not { } editor ? null :

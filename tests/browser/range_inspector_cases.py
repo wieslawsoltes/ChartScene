@@ -30,7 +30,12 @@ def register(test, page, inputs, module, output):
             page.mouse.wheel(0, 160 if b['y']>=v['y'] else -160)
             page.wait_for_function('p=>window.chartScene.controls[p.name]?.y!==p.y', arg={'name':name,'y':b['y']})
         raise AssertionError(('Range control cannot be reached by scrolling',name,state()))
-    def click(name): reveal(name); inputs.click(name)
+    def click(name):
+        reveal(name); inputs.click(name)
+        if name in ('x-min','x-max','y-min','y-max'):
+            # Pointer dispatch is not keyboard-focus completion, particularly while
+            # streaming. Observe actual managed focus before delivering any keys.
+            page.wait_for_function('id=>window.chartSceneFocus?.control===id',arg=name)
     def enter(name, value):
         click(name); page.keyboard.press('Control+a'); page.keyboard.insert_text(value)
         key={'x-min':'xMin','x-max':'xMax','y-min':'yMin','y-max':'yMax'}[name]
@@ -88,11 +93,22 @@ def register(test, page, inputs, module, output):
     def live_axis():
         choose('live','Real-time'); show(); inputs.click('play')
         page.wait_for_function('window.chartScene.streaming&&window.chartScene.ranges.y.min===-1.5&&window.chartScene.ranges.y.max===1.5')
-        enter('y-max','2.5'); x=state()['ranges']['x']['max']
-        page.wait_for_function('x=>window.chartScene.ranges.x.max>x+.1',arg=x)
-        assert draft()['yMax']=='2.5' and not draft()['conflict'] and draft()['applyEnabled']
+        for text in ('2.5','3.25','4.125'):
+            enter('y-max',text); x=state()['ranges']['x']['max']
+            page.wait_for_function('x=>window.chartScene.ranges.x.max>x+.1',arg=x)
+            assert draft()['yMax']==text and not draft()['conflict'] and draft()['applyEnabled']
         inputs.click('play'); page.wait_for_function('!window.chartScene.streaming'); revert()
     test('independent Y draft survives live X updates without stale X input',live_axis)
+    def live_conflict():
+        choose('live','Real-time'); show()
+        if not state()['streaming']: inputs.click('play')
+        page.wait_for_function('window.chartScene.streaming')
+        enter('x-min','-100.25'); x=state()['ranges']['x']['max']
+        page.wait_for_function('x=>window.chartScene.ranges.x.max>x+.1&&window.chartSceneBrowser.rangeEditor.conflict',arg=x)
+        assert draft()['xMin']=='-100.25' and draft()['dirty'] and not draft()['applyEnabled']
+        assert state()['ranges']['x']['min']!=-100.25
+        inputs.click('play'); page.wait_for_function('!window.chartScene.streaming'); revert()
+    test('native input on a moving axis stays intact and reports a range conflict',live_conflict)
     def compact():
         choose('overview','Scientific signals'); page.set_viewport_size({'width':900,'height':700})
         page.wait_for_function('window.chartScene.width===900&&window.chartScene.controls.chart.width>850')
